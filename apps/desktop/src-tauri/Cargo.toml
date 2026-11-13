@@ -1,6 +1,6 @@
 [package]
 name = "docket"
-version = "0.1.0"
+version = "1.0.0"
 description = "Docket — a calm, fast to-do list with AI"
 edition = "2021"
 

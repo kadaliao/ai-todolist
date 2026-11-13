@@ -2,13 +2,13 @@
   "expo": {
     "name": "Docket",
     "slug": "docket",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "scheme": "docket",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "app.docket.mobile",
+      "bundleIdentifier": "com.kadaliao.docket",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -16,7 +16,7 @@
         "NSSpeechRecognitionUsageDescription": "Docket turns your dictation into tasks."
       },
       "entitlements": {
-        "com.apple.security.application-groups": ["group.app.docket.mobile"]
+        "com.apple.security.application-groups": ["group.com.kadaliao.docket"]
       },
       "icon": {
         "light": "./assets/icon.png",
@@ -43,7 +43,7 @@
       }
     },
     "android": {
-      "package": "app.docket.mobile",
+      "package": "com.kadaliao.docket",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1F8F6A",

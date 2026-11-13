@@ -7,7 +7,7 @@ import WidgetKit
 /// The widget never edits that snapshot: checking a task off only records its id in
 /// `widget.done`, which the app applies (and clears) the next time it becomes active.
 enum Shared {
-  static let group = "group.app.docket.mobile"
+  static let group = "group.com.kadaliao.docket"
   static let snapshotKey = "widget"
   static let doneKey = "widget.done"
   static var defaults: UserDefaults? { UserDefaults(suiteName: group) }

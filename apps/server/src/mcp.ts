@@ -61,7 +61,7 @@ const ok = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.s
 const fail = (message: string) => ({ content: [{ type: 'text' as const, text: message }], isError: true });
 
 export function createMcpServer(hub: Hub): McpServer {
-  const server = new McpServer({ name: 'docket', version: '0.1.0' }, { capabilities: { tools: {} } });
+  const server = new McpServer({ name: 'docket', version: '1.0.0' }, { capabilities: { tools: {} } });
   const store = () => hub.replica.store;
   const ctx = () => hub.replica.context('mcp');
 

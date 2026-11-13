@@ -20,8 +20,8 @@ iPhone 截图来自网页预览加演示数据；小组件和 iPad 截图来自�
 | 类别      | 效率（Productivity）                      |
 | 年龄分级  | 4+                                        |
 | 价格      | 免费                                      |
-| Bundle ID | `app.docket.mobile`（iOS / Android 相同） |
-| 版本      | 0.1.0                                     |
+| Bundle ID | `com.kadaliao.docket`（iOS / Android 相同） |
+| 版本      | 1.0.0                                     |
 
 ## 中文
 
@@ -95,6 +95,6 @@ npx eas-cli build --platform android --profile production
 iOS 还需要：
 
 - 团队 ID 通过环境变量 `APPLE_TEAM_ID` 提供（`app.config.ts` 读取，不写进仓库）：本地构建时 `export APPLE_TEAM_ID=…`，EAS 构建用 `npx eas-cli env:create --name APPLE_TEAM_ID --value … --visibility plaintext`。小组件和分享扩展的签名要用它。
-- 三个 Bundle ID：`app.docket.mobile`、`app.docket.mobile.widget`、`app.docket.mobile.share`，都开启 App Groups 并勾选 `group.app.docket.mobile`。用 EAS 构建时，它会按 `@bacons/apple-targets` 写入的扩展信息自动创建这些标识和描述文件。
+- 三个 Bundle ID：`com.kadaliao.docket`、`com.kadaliao.docket.widget`、`com.kadaliao.docket.share`，都开启 App Groups 并勾选 `group.com.kadaliao.docket`。用 EAS 构建时，它会按 `@bacons/apple-targets` 写入的扩展信息自动创建这些标识和描述文件。
 
 截图里的小组件图（`*-widgets.png`）来自模拟器主屏幕：先在模拟器里放上小组件并截图到 `assets/store/raw/<语言>-widgets.png`，再运行截图脚本加标题和外框。

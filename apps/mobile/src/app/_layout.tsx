@@ -112,7 +112,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (!fontsLoaded) return;
     void SplashScreen.hideAsync();
-    // Development only: `xcrun simctl launch booted app.docket.mobile -docketRoute /add` opens a
+    // Development only: `xcrun simctl launch booted com.kadaliao.docket -docketRoute /add` opens a
     // screen directly (iOS exposes launch arguments through user defaults). Used for screenshots.
     if (__DEV__ && Platform.OS === 'ios') {
       const route = Settings.get('docketRoute') as string | undefined;

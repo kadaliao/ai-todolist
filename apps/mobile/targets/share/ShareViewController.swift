@@ -83,7 +83,7 @@ final class ShareModel: ObservableObject {
       "url": url?.absoluteString ?? NSNull(),
       "at": Date().timeIntervalSince1970 * 1000,
     ]
-    let defaults = UserDefaults(suiteName: "group.app.docket.mobile")
+    let defaults = UserDefaults(suiteName: "group.com.kadaliao.docket")
     var queue: [[String: Any]] = []
     if let raw = defaults?.string(forKey: "share.inbox"), let data = raw.data(using: .utf8),
       let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]

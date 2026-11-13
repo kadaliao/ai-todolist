@@ -15,7 +15,7 @@ import { addFromText, addTask, completeFromElsewhere, toast } from './actions';
  *   `share.inbox`; the app applies both, and clears them, whenever it becomes active.
  */
 
-const GROUP = 'group.app.docket.mobile';
+const GROUP = 'group.com.kadaliao.docket';
 const WIDGET_KIND = 'DocketToday';
 const appGroup = Platform.OS === 'ios' ? new ExtensionStorage(GROUP) : null;
 

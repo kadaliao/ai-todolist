@@ -229,7 +229,7 @@ recurrence = { rule: 'FREQ=WEEKLY;BYDAY=MO', from: 'scheduled' | 'completion', a
 ## 小组件与分享
 
 - 两个原生扩展在 `apps/mobile/targets/`，由 `@bacons/apple-targets` 在 prebuild 时生成 Xcode target：`widget`（SwiftUI + WidgetKit，iOS 17+；小/中/大号和三种锁屏样式）和 `share`（分享菜单里的“添加到收件箱”）。
-- 应用与扩展通过 App Group `group.app.docket.mobile` 交换数据，**任务数据只有应用会写**（`src/state/widget.ts`）：
+- 应用与扩展通过 App Group `group.com.kadaliao.docket` 交换数据，**任务数据只有应用会写**（`src/state/widget.ts`）：
   - 应用在数据变化后（500ms 去抖）写入快照 `widget`：过期、今天和之后三天的任务（最多 60 条，含项目名和颜色），并刷新小组件。快照只存日期，“今天”由小组件按每个时间线条目的日期自己算，所以过了午夜不用等应用也会翻页。
   - 在小组件上点圆圈（AppIntent）只把任务 id 记进 `widget.done`，小组件立即显示为已勾选；分享扩展把文字和链接追加到 `share.inbox`。
   - 应用每次回到前台读取并清空这两个队列：勾选的任务一次完成（一个撤销步骤，带提示条）；分享的文字按快速添加规则解析（日期、#项目、@标签、p1），链接放进备注；单独一条链接原样作为标题，不会把 `#片段` 当成项目。
