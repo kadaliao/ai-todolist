@@ -1,0 +1,340 @@
+@import "tailwindcss";
+
+/*
+ * Docket design tokens.
+ * Ink on cool paper; jade marks "done" and primary actions; priorities are vermilion / amber /
+ * lapis. AI proposals use the "draft" language: dashed outlines in jade until accepted.
+ */
+
+:root {
+  --bg: #fbfbfc;
+  --sidebar: #f2f3f5;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --hover: rgba(29, 34, 48, 0.045);
+  --active: rgba(29, 34, 48, 0.08);
+  --ink: #1d2230;
+  --ink-2: #5b6170;
+  --ink-3: #8c919c;
+  --line: #e6e8ec;
+  --line-strong: #d3d6dc;
+  --jade: #1f8f6a;
+  --jade-ink: #ffffff;
+  --jade-soft: #e2f2eb;
+  --jade-line: #9fd2bd;
+  --p1: #d64545;
+  --p2: #dd8f12;
+  --p3: #3d6fd9;
+  --danger: #c93c3c;
+  --select: #e7efff;
+  --select-line: #b9cdf7;
+  --shadow-pop: 0 1px 2px rgba(20, 24, 36, 0.06), 0 8px 28px rgba(20, 24, 36, 0.12);
+  --shadow-float: 0 2px 6px rgba(20, 24, 36, 0.08), 0 18px 48px rgba(20, 24, 36, 0.16);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #17191e;
+  --sidebar: #1b1e24;
+  --surface: #1f2228;
+  --raised: #262a31;
+  --hover: rgba(232, 234, 238, 0.05);
+  --active: rgba(232, 234, 238, 0.09);
+  --ink: #e8eaee;
+  --ink-2: #a3a8b3;
+  --ink-3: #6f7581;
+  --line: #2a2e36;
+  --line-strong: #383d47;
+  --jade: #3fb58a;
+  --jade-ink: #0f1a15;
+  --jade-soft: #1b3229;
+  --jade-line: #2f6a54;
+  --p1: #f06a6a;
+  --p2: #efab3a;
+  --p3: #6f97f2;
+  --danger: #f06a6a;
+  --select: #22304a;
+  --select-line: #35507e;
+  --shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-float: 0 2px 8px rgba(0, 0, 0, 0.35), 0 20px 56px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-sidebar: var(--sidebar);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-jade: var(--jade);
+  --color-jade-ink: var(--jade-ink);
+  --color-jade-soft: var(--jade-soft);
+  --color-jade-line: var(--jade-line);
+  --color-p1: var(--p1);
+  --color-p2: var(--p2);
+  --color-p3: var(--p3);
+  --color-danger: var(--danger);
+  --color-select: var(--select);
+  --color-select-line: var(--select-line);
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI",
+    "Segoe UI", system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", -apple-system, "PingFang SC", sans-serif;
+  --shadow-pop: var(--shadow-pop);
+  --shadow-float: var(--shadow-float);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--jade) 28%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--jade) 70%, transparent);
+  outline-offset: 1px;
+}
+/* Text fields show focus through their own border/caret. */
+input[type="text"]:focus-visible,
+input:not([type]):focus-visible,
+input[type="password"]:focus-visible,
+textarea:focus-visible,
+[cmdk-input]:focus-visible {
+  outline: none;
+}
+
+button {
+  cursor: default;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* Quick add: highlighted tokens are drawn by a mirror layer under a transparent input. */
+.qa-mirror mark {
+  color: transparent;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--mark-line, transparent);
+  background: var(--mark-bg, transparent);
+}
+.qa-mirror mark[data-kind="date"],
+.qa-mirror mark[data-kind="recurrence"] {
+  --mark-bg: color-mix(in srgb, var(--jade) 16%, transparent);
+}
+.qa-mirror mark[data-kind="project"],
+.qa-mirror mark[data-kind="section"] {
+  --mark-bg: color-mix(in srgb, var(--p3) 15%, transparent);
+}
+.qa-mirror mark[data-kind="label"] {
+  --mark-bg: color-mix(in srgb, var(--p2) 18%, transparent);
+}
+.qa-mirror mark[data-kind="priority"] {
+  --mark-bg: color-mix(in srgb, var(--p1) 15%, transparent);
+}
+
+/* AI drafts: dashed jade outline until accepted. */
+.draft {
+  outline: 1.5px dashed var(--jade-line);
+  outline-offset: -1.5px;
+  background: color-mix(in srgb, var(--jade-soft) 55%, transparent);
+}
+
+.prose-notes h1,
+.prose-notes h2,
+.prose-notes h3 {
+  font-weight: 600;
+  margin: 0.6em 0 0.3em;
+}
+.prose-notes p {
+  margin: 0.35em 0;
+}
+.prose-notes ul {
+  list-style: disc;
+  padding-left: 1.3em;
+  margin: 0.35em 0;
+}
+.prose-notes ol {
+  list-style: decimal;
+  padding-left: 1.3em;
+}
+.prose-notes a {
+  color: var(--p3);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-notes code {
+  font-size: 0.92em;
+  background: var(--hover);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* The check-off: ink floods the ring, the tick draws itself, the title is struck through. */
+.check {
+  --c: var(--ink-3);
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px var(--c);
+  background: color-mix(in srgb, var(--c) var(--tint, 0%), transparent);
+  transition:
+    box-shadow 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+  flex-shrink: 0;
+}
+.check[data-priority="3"] {
+  --c: var(--p1);
+  --tint: 9%;
+}
+.check[data-priority="2"] {
+  --c: var(--p2);
+  --tint: 9%;
+}
+.check[data-priority="1"] {
+  --c: var(--p3);
+  --tint: 9%;
+}
+.check:hover {
+  --tint: 16%;
+}
+.check:active {
+  transform: scale(0.88);
+}
+.check svg {
+  width: 11px;
+  height: 11px;
+  stroke: var(--c);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.check:hover svg {
+  opacity: 0.55;
+}
+.check[data-done="true"] {
+  --c: var(--jade);
+  background: var(--jade);
+  box-shadow: inset 0 0 0 1.5px var(--jade);
+}
+.check[data-done="true"] svg {
+  stroke: var(--jade-ink);
+  opacity: 1;
+}
+.check[data-completing="true"] {
+  animation: check-flood 260ms cubic-bezier(0.3, 0.7, 0.2, 1) forwards;
+}
+.check[data-completing="true"] svg {
+  opacity: 1;
+  stroke: var(--jade-ink);
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: check-draw 240ms 110ms ease-out forwards;
+}
+@keyframes check-flood {
+  0% {
+    background: color-mix(in srgb, var(--jade) 0%, transparent);
+    box-shadow: inset 0 0 0 1.5px var(--jade);
+    transform: scale(0.86);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    background: var(--jade);
+    box-shadow: inset 0 0 0 9px var(--jade);
+    transform: scale(1);
+  }
+}
+@keyframes check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.strike {
+  position: relative;
+}
+.strike::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52%;
+  height: 1.5px;
+  background: var(--ink-3);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+[data-completing="true"] .strike {
+  color: var(--ink-3);
+  transition: color 200ms 100ms ease;
+}
+[data-completing="true"] .strike::after {
+  transform: scaleX(1);
+  transition: transform 260ms 90ms cubic-bezier(0.4, 0, 0.2, 1);
+}

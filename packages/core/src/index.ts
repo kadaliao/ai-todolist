@@ -10,7 +10,14 @@ export {
   type QuickAddTokenKind,
   toNewTask,
 } from './parser';
-export { nextOccurrence, occurrenceAfter, reanchor, startRecurrence } from './recurrence';
+export {
+  formatRule,
+  nextOccurrence,
+  occurrenceAfter,
+  parseRule,
+  reanchor,
+  startRecurrence,
+} from './recurrence';
 export * from './replica';
 export { createClock, decode as decodeHlc, type Hlc, type HlcState } from './sync/hlc';
 export { type Cell, type Json, type Mutation, type Op, Store } from './sync/store';
