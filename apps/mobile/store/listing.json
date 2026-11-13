@@ -1,0 +1,31 @@
+{
+  "primaryCategory": "PRODUCTIVITY",
+  "copyright": "2026 Kada Liao",
+  "locales": {
+    "zh-Hans": {
+      "name": "Docket",
+      "subtitle": "一句话记下，安心做完",
+      "promotionalText": "说一句“明天下午3点 写周报 #工作”，日期、项目、优先级自动识别。离线可用，多设备同步，AI 帮你把一段话整理成任务。",
+      "description": "Docket 是一个清爽、快速的待办清单。\n\n- 一句话添加：直接输入“明天下午3点 和设计评审 #工作 p1”“每周一 例会”，日期、重复、项目、标签和优先级都能识别，识别结果一眼可见，点一下就能改回普通文字。\n- 今天、收件箱、即将到来：今天要做的一屏看清，过期任务一键改到今天；未来两周按天排好。\n- 顺手的操作：向右滑完成，向左滑改日期或删除；完成有动画和触感反馈，误操作随时撤销。\n- 重复任务做对了：可以按计划重复，也可以从完成时算起；改期时会问你“只改这一次”还是“改规则”。\n- 子任务、备注、提醒：提醒由系统发送，应用关着也会准时响。\n- 小组件：主屏幕和锁屏上看今天的任务，点圆圈直接完成，不用打开应用。\n- 分享到 Docket：在 Safari、微信、备忘录里选“Docket”，文字或链接直接进收件箱。\n- AI 整理（可选）：把一段话或口述交给 AI，它会拆成几条任务草稿，日期由本机解析，不会乱编；确认后才添加，也能一键撤销。\n- 你的数据归你：所有数据先存在手机上，离线也能用；想多设备同步，就连接你自己部署的 Docket 服务器。",
+      "keywords": "待办,清单,任务,todo,提醒,日程,计划,效率,GTD,AI,自然语言,同步,小组件,快速添加"
+    },
+    "en-US": {
+      "name": "Docket",
+      "subtitle": "Write it down. Get it done.",
+      "promotionalText": "Type “Call mom tomorrow 3pm #Personal p1” and Docket gets the date, project and priority. Works offline, syncs across devices, and AI turns a paragraph into tasks.",
+      "description": "Docket is a calm, fast to-do list.\n\n- Add tasks the way you say them: “Review with design next fri 3pm #Work p1”, “every Monday standup”. Dates, repeats, projects, labels and priority are recognized as you type, and you can tap anything to keep it as plain text.\n- Today, Inbox, Upcoming: see what matters today, move everything overdue to today in one tap, and plan the next two weeks day by day.\n- Gestures that feel right: swipe right to complete, left to reschedule or delete, with haptics and undo for everything.\n- Repeating tasks done right: repeat on a schedule or from when you finish, and choose between “only this one” and “change the rule” when you move one.\n- Subtasks, notes and reminders: reminders are delivered by the system, so they arrive even when the app is closed.\n- Widgets: see today's tasks on your Home Screen and Lock Screen, and check them off right there.\n- Share to Docket: send text or a link from Safari, Mail or Notes straight to your Inbox.\n- Optional AI: hand Docket a paragraph or a dictation and it drafts tasks for you. Dates are worked out on your device, so the AI can't make them up, and nothing is added until you confirm.\n- Your data stays yours: everything lives on your device first and works offline. To sync between devices, connect your own Docket server.",
+      "keywords": "todo,to-do,tasks,reminders,planner,productivity,GTD,checklist,natural language,AI,sync,widget"
+    }
+  },
+  "screenshots": {
+    "APP_IPHONE_67": [
+      "{lang}-today.png",
+      "{lang}-add.png",
+      "{lang}-upcoming.png",
+      "{lang}-detail.png",
+      "{lang}-widgets.png",
+      "{lang}-dark.png"
+    ],
+    "APP_IPAD_PRO_3GEN_129": ["ipad-{lang}-today.png", "ipad-{lang}-upcoming.png", "ipad-{lang}-dark.png"]
+  }
+}

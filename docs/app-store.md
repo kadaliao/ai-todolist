@@ -43,13 +43,13 @@ Docket 是一个清爽、快速的待办清单。
 - AI 整理（可选）：把一段话或口述交给 AI，它会拆成几条任务草稿，日期由本机解析，不会乱编；确认后才添加，也能一键撤销。
 - 你的数据归你：所有数据先存在手机上，离线也能用；想多设备同步，就连接你自己部署的 Docket 服务器。
 
-**关键词**（100 字符内）：待办,清单,任务,todo,提醒,日程,计划,效率,GTD,番茄,习惯,AI,自然语言,同步
+**关键词**（100 字符内）：待办,清单,任务,todo,提醒,日程,计划,效率,GTD,AI,自然语言,同步,小组件,快速添加
 
 ## English
 
 **Subtitle**: Write it down. Get it done.
 
-**Promotional text**: Type “Call mom tomorrow 3pm #Personal p1” and Docket understands the date, project and priority. Works offline, syncs across your devices, and AI can turn a paragraph into tasks.
+**Promotional text**: Type “Call mom tomorrow 3pm #Personal p1” and Docket gets the date, project and priority. Works offline, syncs across devices, and AI turns a paragraph into tasks.
 
 **Description**:
 
@@ -65,7 +65,7 @@ Docket is a calm, fast to-do list.
 - Optional AI: hand Docket a paragraph or a dictation and it drafts tasks for you. Dates are worked out on your device, so the AI can't make them up, and nothing is added until you confirm.
 - Your data stays yours: everything lives on your device first and works offline. To sync between devices, connect your own Docket server.
 
-**Keywords**: todo,to-do,tasks,reminders,planner,productivity,GTD,checklist,natural language,AI,sync,offline
+**Keywords**: todo,to-do,tasks,reminders,planner,productivity,GTD,checklist,natural language,AI,sync,widget
 
 ## 隐私（App Privacy）
 
@@ -108,3 +108,17 @@ iOS 还需要：
   产出已签名、已公证并装订的 `Docket.app` 和 DMG。发布到 GitHub Release 后，Homebrew cask `kadaliao/tap/docket` 会自动跟上。
 - **Android**：上传密钥放在仓库外，构建时用 `-Pandroid.injected.signing.store.file / store.password / key.alias / key.password` 传给 `./gradlew :app:bundleRelease`（Google Play 用的 AAB）或 `:app:assembleRelease`（直接安装的 APK）。
 - **iOS**：API 密钥需要 Admin 角色，`xcodebuild archive -allowProvisioningUpdates -authenticationKeyPath … -authenticationKeyID … -authenticationKeyIssuerID …` 才能自动注册 Bundle ID、App Group 并生成描述文件；权限不够时这一步要在开发者网站上完成。App Store Connect 里的应用记录只能在网页上创建。
+
+### 上架资料自动填写
+
+应用记录在 App Store Connect 网页上建好之后，其余资料用脚本推上去（文案在 `apps/mobile/store/listing.json`，截图在 `assets/store/`）：
+
+```sh
+set -a; . ./.env.release; set +a          # ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_PATH
+export DOCKET_SITE_URL=https://你的服务器   # 隐私政策和支持页面所在的地址
+node scripts/appstore.mjs status
+node scripts/appstore.mjs metadata          # 类别、年龄分级、名称、副标题、描述、关键词、宣传文本、网址
+node scripts/appstore.mjs screenshots       # iPhone 6.9" 与 iPad 13" 截图（中英）
+```
+
+都可以加 `--dry-run` 先看会改什么。重复执行是安全的：已有的内容会被更新，截图会整组替换。
