@@ -12,23 +12,18 @@
 ## 结构
 
 ```
-ai-todolist/                pnpm workspace，TypeScript，Vitest，Biome
-├─ packages/core            ✅ M1：领域模型、命令层、同步、解析器、重复、排序、撤销、视图
-├─ packages/ai              M4：AI 工具定义（zod）、prompt、评测语料（App 内 AI 与 MCP 共用）
-├─ apps/web                 M2：React 19 + Vite；同一份代码既当 PWA，也被 Tauri 包成桌面端
-├─ apps/desktop             M2：Tauri 2 外壳：全局热键快速录入窗、托盘、本地提醒调度
-├─ apps/server              M3：Hono + SQLite：同步中继、AI 代理、MCP、Web Push
-└─ apps/mobile              M5：Expo + Expo Router + Reanimated
+ai-todolist/                pnpm workspace，TypeScript，Vitest，Biome，Playwright
+├─ packages/core            领域模型、命令层、同步（op-log、HLC、合并、修复、同步客户端）、解析器、重复、排序、撤销、视图、提醒时间
+├─ packages/shared          界面文字（中/英）与日期格式化，web 与 mobile 共用
+├─ apps/web                 React 19 + Vite：网页 / PWA，也是桌面应用的界面
+├─ apps/desktop             Tauri 2 外壳：全局快速录入窗、菜单栏、原生通知、窗口状态
+├─ apps/mobile              Expo SDK 58 + Expo Router + Reanimated：手机应用
+└─ apps/server              Hono + node:sqlite：同步中继、AI 接口、MCP，同时托管网页
 ```
 
-**Web 和桌面共用一套 React DOM UI。**键盘流和拖拽在 DOM 里做得最好。
-
-**移动端单独用 Expo 写 RN UI。**可靠的本地定时提醒、分享扩展、小组件、原生手势，这些 Tauri mobile 和 Capacitor 都给不了。两套 UI 共享 `core` 和 React hooks，重复的部分只剩视图层。
-
-**Temporal**
-
-- `core` 依赖全局 `Temporal`：Node 26、新版 Chrome / Firefox 是原生的。
-- 运行环境没有它时，应用入口要先 `import 'temporal-polyfill/global'`。Hermes 和旧版 Safari 都需要。
+- **Web 和桌面共用一套 React DOM UI**：键盘流和拖拽在 DOM 里做得最好。桌面端由 Tauri 包一层，补上浏览器做不到的部分。
+- **手机端用 Expo 单独写 RN UI**：滑动手势、触感、系统通知、表单 sheet 都是原生的。手机与 web 共享 `core`（数据、命令、同步、解析）和 `shared`（文字、日期格式），重复的只有视图层。
+- **Temporal**：`core` 依赖全局 `Temporal`。Node 26 / 新版 Chrome 原生自带；手机端（Hermes）在入口 `import 'temporal-polyfill/global'`；web 在启动时按需加载 polyfill。CI 会用强制 polyfill 的方式把 core 测试再跑一遍。
 
 ## 数据模型（`core/src/model.ts`）
 
@@ -77,11 +72,12 @@ ai-todolist/                pnpm workspace，TypeScript，Vitest，Biome
 | `snapshot()` / `fromSnapshot()` | 持久化：全部 cell、时钟、outbox。撤销历史不持久化                       |
 | `subscribe()`                   | 状态变化时通知 UI；`store.version` 可用来做 memo                        |
 
-**服务端只是中继**（M3）。
-
-- 它存 op，按游标提供增量拉取，并用 WebSocket 通知其他设备来拉。
-- 鉴权是单用户，每台设备一个 token。
-- 服务端不需要理解业务。
+**服务端是中继，也是一台“设备”**。
+- 它存 op（只追加），按游标提供增量拉取，并用 WebSocket 通知其他设备来拉。
+- 鉴权是单用户，每台设备一个 token（只存 SHA-256），可单独吊销。
+- 启动时把整个 op-log 回放进一个服务端 replica，MCP 工具在它上面执行和 app 相同的命令；产生的 op 写回日志，同步给所有设备。
+- 同步客户端（`core/src/sync/client.ts`）由 web 与 mobile 共用：存储与联网状态由平台注入；手机进入后台时暂停 WebSocket，回到前台立即同步。
+- 新设备首次连接时，如果它只有未改动的示例任务、而账户里已有数据，就丢弃本地示例、直接采用账户数据，避免两份示例合并在一起。
 
 **排序**：`fractional-indexing` 加 jitter，按 `(sortKey, id)` 排序。
 
@@ -209,32 +205,37 @@ recurrence = { rule: 'FREQ=WEEKLY;BYDAY=MO', from: 'scheduled' | 'completion', a
 
 已归档或已删除的项目，其任务不出现在日期视图里。
 
-## AI 接入（M4，规划）
+## AI 接入
 
-- 调用一律走 `apps/server` 代理。用 Vercel AI SDK + `@ai-sdk/openai-compatible`，可以配多套 provider：一个快模型做解析，一个强模型做 agent。
-- AI 只产出类型化命令，走同一个命令层。
+- 调用一律走 `apps/server`，key 不落在客户端。用 Vercel AI SDK + `@ai-sdk/openai-compatible`，任何 OpenAI 兼容接口都能用；不支持 JSON schema 的提供方（如 DeepSeek）设 `DOCKET_AI_STRUCTURED_OUTPUTS=0`。
+- **模型不算日期**：抽取时只让模型返回原文里的时间短语（“下周五下午3点”），由本地解析器换算成日期。评测见 `apps/server/test/ai.live.test.ts`。
+- 结果以 NDJSON 流式返回，草稿一条条出现（网页用 `fetch` 流，手机用 XHR progress）。provider 的错误会如实传回，而不是变成“没找到任务”。
+- AI 只产出类型化命令，走同一个命令层，`actor = 'ai'`：
 
-| 影响 | 怎么提出、怎么应用                 | 撤销         |
-| ---- | ---------------------------------- | ------------ |
-| 新增 | 预览卡片，可以"全部添加"           | 一次撤销     |
-| 修改 | "改前 → 改后"的 diff，可以逐条勾选 | `revert(tx)` |
-| 删除 | AI 只能软删自己建的任务            | 回收站       |
+| 影响 | 怎么提出、怎么应用 | 撤销 |
+|---|---|---|
+| 新增 | 虚线“草稿”卡片，可逐条取消，“全部添加” | 一次撤销 / `revert(tx)` |
+| 拆子任务 | 虚线草稿，Tab 接受、Esc 放弃 | 一次撤销 |
+| MCP 修改 | 直接生效，标记 `mcp` | `undo-last-change` |
+| 删除 | agent 只能软删自己建的任务 | 回收站 |
 
-- **MVP 功能**：长文本建议"拆成 N 条"；brain dump 生成预览卡片；按需拆子任务（Tab 接受，Esc 丢弃）；AI 活动日志。
-- **MCP server** 与 `packages/ai` 共用工具定义：`find-tasks`、`find-tasks-by-date`、`add-tasks`、`update-tasks`、`complete-tasks`、`reschedule-tasks`、`get-overview`。不提供硬删除。
+## 提醒
 
-## 部署（M3，规划）
+- 提醒时间由 `core/src/reminders.ts` 统一计算：有时间、没有显式提醒的任务默认准时提醒（可关）；相对提醒按分钟提前；浮动时间按设备时区换算，跨夏令时保持墙钟时间。
+- **网页 / 桌面**：应用内调度，只为下一个提醒挂一个定时器；每个提醒只响一次（记在本地），错过不超过 15 分钟的仍会补发。桌面版关闭窗口后常驻菜单栏，因此提醒照常。
+- **手机**：交给系统（`expo-notifications`），应用关闭也会响；数据一变就重新排程未来两周内最近的 40 个（iOS 上限 64）；点通知打开对应任务。
 
-- `apps/server` 打成 Docker 镜像，跑在 lsp 上，由 Caddy 用子域名反代到 443。不新开端口，符合 host-firewall 规则。
-- SQLite 文件挂 volume，定时备份。
+## 部署
+
+见 [deploy.md](./deploy.md)：Docker 镜像（非 root、带健康检查）同时托管网页；Caddy 反代到 443；`cli backup` 做一致性备份。
 
 ## 路线图
 
-| 阶段       | 内容                                                                                                                                            |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0 / M1 ✅ | 仓库骨架；core 包及测试                                                                                                                         |
-| M2         | Web / 桌面 UI：三栏布局、快速添加高亮、拖拽、快捷键和命令面板、撤销提示条、完成动画、多选、搜索、日志簿、改期过期任务；Tauri 热键窗、托盘、提醒 |
-| M3         | 同步服务 + 部署 + Web Push                                                                                                                      |
-| M4         | AI 功能 + MCP                                                                                                                                   |
-| M5         | 移动端                                                                                                                                          |
-| v2         | 日历 / 时间块、看板、四象限、过滤语法、When 与 Deadline 分开、法定节假日 / 农历、自然语言过滤、命令面板 agent、每日规划、周回顾、番茄钟         |
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| M0 / M1 | 仓库骨架；core 包及测试 | ✅ |
+| M2 | Web / 桌面 UI；Tauri 快速录入窗、菜单栏、提醒 | ✅ |
+| M3 | 同步服务 + Docker 部署 + 备份 | ✅ |
+| M4 | AI 抽取 / 拆分 + 评测 + MCP | ✅ |
+| M5 | 手机应用（Expo） | ✅ |
+| v2 | 日历 / 时间块、看板、四象限、过滤语法、When 与 Deadline 分开、法定节假日 / 农历、手机小组件与分享扩展、命令面板 agent、每日规划、周回顾、番茄钟 | — |
