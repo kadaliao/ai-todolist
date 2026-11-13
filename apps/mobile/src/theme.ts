@@ -54,6 +54,9 @@ const dark: typeof light = {
 
 export type Colors = typeof light;
 
+/** Both palettes, for places that render outside React's color scheme (the Android widget). */
+export const palette = { light, dark };
+
 export function useColors(): Colors {
   return useColorScheme() === 'dark' ? dark : light;
 }

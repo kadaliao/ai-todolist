@@ -95,6 +95,9 @@ importers:
       react-native:
         specifier: 0.88.1
         version: 0.88.1(@babel/core@7.29.13)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
+      react-native-android-widget:
+        specifier: ^0.26.0
+        version: 0.26.0(expo@58.0.25)(react-native@0.88.1)(react@19.3.0)
       react-native-gesture-handler:
         specifier: ~3.3.0
         version: 3.3.0(react-native@0.88.1)(react@19.3.0)
@@ -8220,6 +8223,21 @@ packages:
 
   /react-is@19.3.1:
     resolution: {integrity: sha512-RRieF6IyxQBkcK6pP8xOHprLTPW6QjRkbGdImtqNme+/hYVwCZkLQLdlZGOhUqXwkS9IEynaGvPJtv6XB/cz0Q==}
+    dev: false
+
+  /react-native-android-widget@0.26.0(expo@58.0.25)(react-native@0.88.1)(react@19.3.0):
+    resolution: {integrity: sha512-yRRj140jGbhrhuHnahMmLplWJV2BAJCOVpZu5gHHVufJUfD3qyBAosgrmea8VUNfExUquYSBMfCmin1ZVZ3H2Q==}
+    peerDependencies:
+      expo: '>=54.0.0'
+      react: '*'
+      react-native: '*'
+    peerDependenciesMeta:
+      expo:
+        optional: true
+    dependencies:
+      expo: 58.0.25(@babel/core@7.29.13)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.31)(react-dom@19.3.0)(react-native-web@0.21.4)(react-native-worklets@0.13.0)(react-native@0.88.1)(react@19.3.0)(typescript@6.0.3)
+      react: 19.3.0
+      react-native: 0.88.1(@babel/core@7.29.13)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
     dev: false
 
   /react-native-drawer-layout@4.2.12(react-native-gesture-handler@3.3.0)(react-native-reanimated@4.7.1)(react-native@0.88.1)(react@19.3.0):

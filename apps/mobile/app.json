@@ -86,10 +86,43 @@
           "disableIOS": true,
           "androidIntentFilters": ["text/*"]
         }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "DocketToday",
+              "label": "Docket",
+              "description": "Today's and overdue tasks. Tap a circle to complete one.",
+              "minWidth": "250dp",
+              "minHeight": "180dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "widgetCategory": "home_screen",
+              "updatePeriodMillis": 1800000,
+              "previewImage": "./assets/widget-preview.png"
+            }
+          ]
+        }
+      ],
+      [
+        "./plugins/withLocalizedWidgetPreview",
+        {
+          "name": "DocketToday",
+          "images": {
+            "b+zh+Hans": "./assets/widget-preview-zh.png"
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "locales": {
+      "en": "./locales/en.json",
+      "zh-Hans": "./locales/zh-Hans.json"
     }
   }
 }

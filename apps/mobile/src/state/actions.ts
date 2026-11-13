@@ -33,6 +33,11 @@ let replica: Replica;
 export function bindActions(r: Replica): void {
   replica = r;
 }
+/** False in a headless task (the Android widget) when the app itself isn't running. */
+export function hasReplica(): boolean {
+  return replica !== undefined;
+}
+
 export function getReplica(): Replica {
   return replica;
 }

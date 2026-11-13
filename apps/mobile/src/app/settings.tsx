@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { requestPinWidget } from 'react-native-android-widget';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Txt } from '../components/ui';
 import { requestPermission, setNotifySettings, useNotify } from '../state/notifications';
@@ -19,6 +20,7 @@ import { useReplica } from '../state/replica';
 import { setSetting } from '../state/storage';
 import { connectSync, disconnectSync, syncNow, useSync } from '../state/sync';
 import { useColors } from '../theme';
+import { WIDGET_NAME } from '../widget/android';
 
 export default function SettingsScreen() {
   const c = useColors();
@@ -162,6 +164,19 @@ export default function SettingsScreen() {
           </Row>
         )}
       </Group>
+
+      {Platform.OS === 'android' ? (
+        <Group title={zh ? '桌面小组件' : 'Home screen widget'}>
+          <Row
+            label={zh ? '今天的任务，点圆圈直接完成' : "Today's tasks, check them off from the home screen"}
+          >
+            <Btn
+              label={zh ? '添加' : 'Add'}
+              onPress={() => void requestPinWidget({ widgetName: WIDGET_NAME })}
+            />
+          </Row>
+        </Group>
+      ) : null}
 
       <Group title={t('settings.ai')}>
         <Txt variant="meta" style={styles.help}>

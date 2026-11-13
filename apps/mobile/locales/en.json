@@ -1,0 +1,7 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Docket",
+    "NSMicrophoneUsageDescription": "Docket uses the microphone when you dictate tasks.",
+    "NSSpeechRecognitionUsageDescription": "Docket turns your dictation into tasks."
+  }
+}

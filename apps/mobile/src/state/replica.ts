@@ -106,7 +106,10 @@ function save(r: Replica): void {
 function attachPersistence(r: Replica): void {
   r.subscribe(() => {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => save(r), 500);
+    // In the background (a widget check-off, a sync) JS timers may not run before the OS kills
+    // the process, so write right away; in the foreground, batch bursts of edits.
+    if (AppState.currentState !== 'active') save(r);
+    else saveTimer = setTimeout(() => save(r), 500);
   });
   AppState.addEventListener('change', (s) => {
     if (s !== 'active' && saveTimer !== undefined) save(r);

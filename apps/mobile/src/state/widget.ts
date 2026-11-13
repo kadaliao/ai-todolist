@@ -1,20 +1,23 @@
-import { addDays, type Replica, type Task, today as todayView, upcoming } from '@ai-todo/core';
+import type { Replica } from '@ai-todo/core';
 import { getLocale, t } from '@ai-todo/shared';
 import { ExtensionStorage } from '@bacons/apple-targets';
 import { AppState, Platform } from 'react-native';
+import { publishAndroidWidget, takeDone } from '../widget/android';
+import { buildWidgetSnapshot } from '../widget/model';
 import { addFromText, addTask, completeFromElsewhere, toast } from './actions';
 
 /**
- * Bridge to the iOS widget and share extension through the App Group (targets/widget,
- * targets/share). The app is the only writer of task data:
- * - it publishes a small snapshot of overdue, today's and the next few days' tasks for the widget;
- * - the widget records check-offs in `widget.done`, and the share extension queues items in
- *   `share.inbox`; the app applies both (and clears them) whenever it becomes active.
+ * Bridge to the home-screen widgets and the iOS share extension. The app is the only writer of
+ * task data:
+ * - it publishes a small snapshot of overdue, today's and the next few days' tasks;
+ * - check-offs made in a widget while the app was closed are queued (iOS: `widget.done` in the App
+ *   Group; Android: `widget-done.json`), and the iOS share extension queues items in
+ *   `share.inbox`; the app applies both, and clears them, whenever it becomes active.
  */
 
 const GROUP = 'group.app.docket.mobile';
 const WIDGET_KIND = 'DocketToday';
-const storage = Platform.OS === 'ios' ? new ExtensionStorage(GROUP) : null;
+const appGroup = Platform.OS === 'ios' ? new ExtensionStorage(GROUP) : null;
 
 interface SharedItem {
   text: string;
@@ -22,10 +25,10 @@ interface SharedItem {
 }
 
 function take<T>(key: string): T | null {
-  if (!storage) return null;
-  const raw = storage.get(key);
+  if (!appGroup) return null;
+  const raw = appGroup.get(key);
   if (!raw) return null;
-  storage.remove(key);
+  appGroup.remove(key);
   try {
     return JSON.parse(raw) as T;
   } catch {
@@ -33,44 +36,31 @@ function take<T>(key: string): T | null {
   }
 }
 
-/** Serialized widget snapshot; exported for tests. */
-export function widgetSnapshot(r: Replica, locale: string): string {
-  const day = r.context().today;
-  const { overdue, today } = todayView(r.store, day);
-  const soon = upcoming(r.store, addDays(day, 1), 3).flatMap((b) => b.tasks);
-  const projects = new Map(r.store.all('project').map((p) => [p.id, p]));
-  const row = (task: Task) => {
-    const project = task.projectId ? projects.get(task.projectId) : undefined;
-    return {
-      id: task.id,
-      title: task.title,
-      date: task.scheduled?.date ?? day,
-      time: task.scheduled?.time ?? null,
-      priority: task.priority,
-      project: project?.name ?? null,
-      color: project?.color ?? null,
-    };
-  };
-  return JSON.stringify({ locale, tasks: [...overdue, ...today, ...soon].slice(0, 60).map(row) });
-}
-
 export function startWidgetBridge(r: Replica): () => void {
-  if (!storage) return () => {};
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return () => {};
   let last = '';
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const publish = () => {
     clearTimeout(timer);
-    const next = widgetSnapshot(r, getLocale());
-    if (next === last) return;
-    last = next;
-    storage.set('widget', next);
-    ExtensionStorage.reloadWidget(WIDGET_KIND);
+    const snapshot = buildWidgetSnapshot(r, getLocale());
+    const json = JSON.stringify(snapshot);
+    if (json === last) return;
+    last = json;
+    if (appGroup) {
+      appGroup.set('widget', json);
+      ExtensionStorage.reloadWidget(WIDGET_KIND);
+    } else {
+      void publishAndroidWidget(snapshot);
+    }
   };
 
   const ingest = () => {
-    const done = take<string[]>('widget.done');
-    if (done?.length) completeFromElsewhere(done);
+    const done = appGroup ? take<string[]>('widget.done') : takeDone();
+    if (done?.length) {
+      completeFromElsewhere(done);
+      last = ''; // the queue is gone, so the widget must redraw without the checked rows
+    }
     // Publish right away so checked-off rows don't flash back before the debounce fires.
     publish();
 
