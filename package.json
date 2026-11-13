@@ -1,6 +1,7 @@
 {
   "name": "ai-todolist",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "test": "pnpm -r --if-present run test",

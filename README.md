@@ -60,3 +60,7 @@ pnpm --filter @ai-todo/server eval    # 用真实模型评测 AI 抽取（需 DO
 pnpm typecheck && pnpm lint
 node scripts/icons.mjs                # 从 icon.svg 生成全平台图标
 ```
+
+## 许可证
+
+[MIT](LICENSE)。应用内置的 Bricolage Grotesque 字体采用 SIL Open Font License 1.1。
