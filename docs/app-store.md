@@ -1,6 +1,16 @@
 # App Store / Google Play 上架资料
 
-截图：`assets/store/{zh,en}-*.png`，1320×2868（6.9 英寸）。由 `node scripts/store-screenshots.mjs` 从手机界面加演示数据生成：先 `cd apps/mobile && pnpm web`，再运行脚本。图标：`assets/icon-ios-1024.png`（iOS，无透明）、`apps/mobile/assets/adaptive-icon.png`（Android）。
+素材都在 `assets/store/`，由 `node scripts/store-screenshots.mjs` 生成（先 `cd apps/mobile && pnpm web`；只重排版式、不重新截图时加 `--frame-only`，不需要网络）：
+
+| 用途                  | 文件                                                   | 尺寸                              |
+| --------------------- | ------------------------------------------------------ | --------------------------------- |
+| App Store iPhone 6.9" | `{zh,en}-{today,add,upcoming,detail,dark,widgets}.png` | 1320×2868                         |
+| App Store iPad 13"    | `ipad-{zh,en}-{today,upcoming,dark}.png`               | 2064×2752                         |
+| Google Play 手机截图  | `play/{zh,en}-{today,add,upcoming,detail,dark}.png`    | 1080×1920（9:16，满足推荐位要求） |
+| Google Play 宣传图    | `play/feature-{zh,en}.png`                             | 1024×500                          |
+| Google Play 图标      | `play/icon-512.png`                                    | 512×512                           |
+
+iPhone 截图来自网页预览加演示数据；小组件和 iPad 截图来自模拟器（原图在 `raw/`）。应用图标：`assets/icon-ios-1024.png`（iOS，无透明；深色与着色版本在 `apps/mobile/assets/`）、`apps/mobile/assets/adaptive-icon.png`（Android，另有单色主题图标）。
 
 ## 基本信息
 
@@ -84,7 +94,7 @@ npx eas-cli build --platform android --profile production
 
 iOS 还需要：
 
-- 在 `app.json` 的 `expo.ios.appleTeamId` 填团队 ID（小组件和分享扩展的签名要用）。
+- 团队 ID 通过环境变量 `APPLE_TEAM_ID` 提供（`app.config.ts` 读取，不写进仓库）：本地构建时 `export APPLE_TEAM_ID=…`，EAS 构建用 `npx eas-cli env:create --name APPLE_TEAM_ID --value … --visibility plaintext`。小组件和分享扩展的签名要用它。
 - 三个 Bundle ID：`app.docket.mobile`、`app.docket.mobile.widget`、`app.docket.mobile.share`，都开启 App Groups 并勾选 `group.app.docket.mobile`。用 EAS 构建时，它会按 `@bacons/apple-targets` 写入的扩展信息自动创建这些标识和描述文件。
 
 截图里的小组件图（`*-widgets.png`）来自模拟器主屏幕：先在模拟器里放上小组件并截图到 `assets/store/raw/<语言>-widgets.png`，再运行截图脚本加标题和外框。
