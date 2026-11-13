@@ -12,7 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams } from 'expo-router';
 import { Calendar, Flag, Hash, Inbox, Repeat, Tag } from 'lucide-react-native';
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip, Txt } from '../components/ui';
 import { addTasks, run } from '../state/actions';
@@ -132,12 +132,7 @@ export default function AddSheet() {
           ))}
         </View>
       )}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
-        keyboardShouldPersistTaps="always"
-      >
+      <View style={styles.chips}>
         <Chip
           active={!!scheduled}
           icon={<Calendar size={15} color={scheduled ? c.jade : c.ink2} />}
@@ -177,14 +172,9 @@ export default function AddSheet() {
             {l.name}
           </Chip>
         ))}
-      </ScrollView>
+      </View>
       {picker === 'date' && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-          keyboardShouldPersistTaps="always"
-        >
+        <View style={styles.chips}>
           {(
             [
               [t('date.today'), today],
@@ -205,15 +195,10 @@ export default function AddSheet() {
               {label}
             </Chip>
           ))}
-        </ScrollView>
+        </View>
       )}
       {picker === 'project' && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-          keyboardShouldPersistTaps="always"
-        >
+        <View style={styles.chips}>
           <Chip
             active={pid === null && !newProject}
             onPress={() => {
@@ -236,7 +221,7 @@ export default function AddSheet() {
               {p.name}
             </Chip>
           ))}
-        </ScrollView>
+        </View>
       )}
       <View style={styles.footer}>
         <Txt variant="meta" style={{ flex: 1 }}>
@@ -259,7 +244,8 @@ const styles = StyleSheet.create({
   input: { fontSize: 19, lineHeight: 25, minHeight: 44, paddingVertical: 8 },
   tokens: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 20, paddingBottom: 4 },
   token: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4 },
-  chips: { gap: 8, paddingHorizontal: 20, paddingVertical: 8 },
+  // Plain wrapping rows: horizontal ScrollViews don't measure inside fit-to-content sheets.
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingVertical: 8 },
   footer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 6 },
   addBtn: {
     height: 40,
