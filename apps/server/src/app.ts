@@ -27,7 +27,14 @@ const contextSchema = z.object({
   labels: z.array(z.string().max(200)).max(500).default([]),
 });
 
-export function createApp(opts: { db: Db; hub: Hub; ai: Ai | null; upgradeWebSocket?: UpgradeWebSocket }) {
+export function createApp(opts: {
+  db: Db;
+  hub: Hub;
+  ai: Ai | null;
+  upgradeWebSocket?: UpgradeWebSocket;
+  /** Built web app to serve at `/` (same origin as the API). */
+  webDir?: string;
+}) {
   const { db, hub, ai } = opts;
   const app = new Hono<Env>();
 
@@ -40,8 +47,7 @@ export function createApp(opts: { db: Db; hub: Hub; ai: Ai | null; upgradeWebSoc
     }),
   );
 
-  app.get('/', (c) => c.text('docket-server'));
-  app.get('/api/ping', (c) => c.json({ ok: true }));
+  app.get('/api/ping', (c) => c.json({ ok: true, name: 'docket-server' }));
 
   app.use('/api/*', async (c, next) => {
     if (c.req.path === '/api/ping') return next();
@@ -194,7 +200,50 @@ export function createApp(opts: { db: Db; hub: Hub; ai: Ai | null; upgradeWebSoc
     return res;
   });
 
+  if (opts.webDir) mountWeb(app, opts.webDir);
+  else app.get('/', (c) => c.text('docket-server'));
+
   return app;
+}
+
+/** Static web app with SPA fallback; hashed assets are immutable, index.html is not cached. */
+function mountWeb(app: Hono<Env>, dir: string) {
+  const types: Record<string, string> = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.woff2': 'font/woff2',
+    '.webmanifest': 'application/manifest+json',
+    '.json': 'application/json',
+    '.ico': 'image/x-icon',
+    '.map': 'application/json',
+  };
+  app.get('*', async (c) => {
+    const { readFile } = await import('node:fs/promises');
+    const { extname, join, normalize } = await import('node:path');
+    const rel = normalize(decodeURIComponent(c.req.path)).replace(/^(\.\.[/\\])+/, '');
+    const tryFile = async (p: string) => {
+      try {
+        return await readFile(join(dir, p));
+      } catch {
+        return null;
+      }
+    };
+    let file = rel !== '/' ? await tryFile(rel) : null;
+    let ext = extname(rel);
+    if (!file) {
+      file = await tryFile('index.html');
+      ext = '.html';
+    }
+    if (!file) return c.notFound();
+    const immutable = rel.startsWith('/assets/');
+    return c.body(new Uint8Array(file), 200, {
+      'Content-Type': types[ext] ?? 'application/octet-stream',
+      'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
+    });
+  });
 }
 
 function friendlyAiError(e: unknown): string {

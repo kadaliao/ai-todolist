@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/data
+**/.turbo
+**/test-results
+**/*.tmp.mjs
+.git
+apps/desktop/src-tauri/target
+apps/mobile
+assets

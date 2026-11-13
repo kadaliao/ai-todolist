@@ -1,0 +1,14 @@
+# Copy .env.example to .env, fill in the AI settings, then: docker compose up -d
+# Create a token per device: docker compose exec docket node dist/cli.js token create <name>
+services:
+  docket:
+    build: .
+    image: docket-server:latest
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8787:8787" # put a reverse proxy (Caddy) with HTTPS in front
+    volumes:
+      - docket-data:/data
+volumes:
+  docket-data:

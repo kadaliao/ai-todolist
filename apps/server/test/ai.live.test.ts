@@ -16,7 +16,8 @@ const config = loadConfig();
 const live = config.ai ? describe : describe.skip;
 const tz = 'Asia/Shanghai';
 const today = todayIn(new Date(), tz);
-const nextWeekday = (iso: number) => addDays(today, (iso - isoWeekday(today) + 7) % 7 || 7);
+// A bare weekday is today when it names today, otherwise the next one.
+const nextWeekday = (iso: number) => addDays(today, (iso - isoWeekday(today) + 7) % 7);
 const ctx: AiContext = {
   today,
   timeZone: tz,

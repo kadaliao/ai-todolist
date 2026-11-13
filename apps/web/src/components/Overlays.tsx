@@ -142,10 +142,18 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (open) {
-      setUrl(config?.url ?? '');
-      setToken(config?.token ?? '');
-      setError(null);
+    if (!open) return;
+    setUrl(config?.url ?? '');
+    setToken(config?.token ?? '');
+    setError(null);
+    // Served by docket-server itself? Then that's the sync server — prefill its address.
+    if (!config && location.protocol.startsWith('http')) {
+      fetch('/api/ping')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((b: { name?: string } | null) => {
+          if (b?.name === 'docket-server') setUrl((u) => u || location.origin);
+        })
+        .catch(() => {});
     }
   }, [open, config]);
 

@@ -89,3 +89,9 @@ async function boot() {
 }
 
 void boot();
+
+// Offline app shell for the PWA (not inside the desktop/mobile shells, which bundle the app).
+const inShell = '__TAURI_INTERNALS__' in window;
+if (import.meta.env.PROD && 'serviceWorker' in navigator && !inShell && location.protocol === 'https:') {
+  window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js'));
+}

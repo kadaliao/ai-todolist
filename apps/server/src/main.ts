@@ -16,7 +16,10 @@ const ai = config.ai ? new Ai(config.ai) : null;
 
 const root = new Hono();
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app: root });
-root.route('/', createApp({ db, hub, ai, upgradeWebSocket }));
+root.route(
+  '/',
+  createApp({ db, hub, ai, upgradeWebSocket, ...(config.webDir ? { webDir: config.webDir } : {}) }),
+);
 
 const server = serve({ fetch: root.fetch, port: config.port, hostname: config.host }, (info) => {
   const devices = db.listDevices().length;
