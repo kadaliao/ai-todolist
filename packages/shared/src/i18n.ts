@@ -76,6 +76,8 @@ const zh = {
   'task.moveTo': '移动到…',
   'task.schedule': '安排日期…',
   'a11y.done': '已完成',
+  'a11y.tasks': '任务列表',
+  'a11y.task': '任务',
   'a11y.toTomorrow': '改到明天',
   'a11y.subtasks': '子任务 {done}/{total}',
 
@@ -311,6 +313,8 @@ const en: Record<MessageKey, string> = {
   'task.moveTo': 'Move to…',
   'task.schedule': 'Schedule…',
   'a11y.done': 'Completed',
+  'a11y.tasks': 'Tasks',
+  'a11y.task': 'task',
   'a11y.toTomorrow': 'Move to tomorrow',
   'a11y.subtasks': 'Subtasks {done} of {total}',
   'priority.3': 'Priority 1',

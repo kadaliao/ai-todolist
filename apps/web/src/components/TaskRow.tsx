@@ -115,8 +115,6 @@ export const TaskRow = memo(function TaskRow({
           ref={rowRef}
           data-task-row={task.id}
           data-completing={completing}
-          role="option"
-          aria-selected={selected}
           tabIndex={-1}
           onClick={onClick}
           onDoubleClick={() => useUI.getState().setEditing(task.id)}

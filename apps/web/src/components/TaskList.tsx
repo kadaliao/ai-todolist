@@ -1,4 +1,5 @@
 import { sortByOrder, type Task } from '@ai-todo/core';
+import { formatScheduled, t } from '@ai-todo/shared';
 import { SortableKeyboardPlugin } from '@dnd-kit/dom/sortable';
 import { useSortable } from '@dnd-kit/react/sortable';
 import { AnimatePresence, motion } from 'motion/react';
@@ -93,9 +94,12 @@ export function TaskList({
   depth = 0,
   childMap: childMapProp,
   empty,
+  label,
 }: {
   tasks: Task[];
   group: string;
+  /** Accessible name of the list (top-level lists only). */
+  label?: string;
   options?: RowOptions;
   nest?: boolean;
   depth?: number;
@@ -111,7 +115,13 @@ export function TaskList({
   );
   if (!tasks.length && empty) return <>{empty}</>;
   return (
-    <div role="listbox" aria-multiselectable className="flex flex-col">
+    // A tree: rows can hold subtasks (role="group") and buttons, which a listbox can't.
+    <div
+      role={depth ? 'group' : 'tree'}
+      aria-multiselectable={depth ? undefined : true}
+      aria-label={depth ? undefined : (label ?? t('a11y.tasks'))}
+      className="flex flex-col"
+    >
       <AnimatePresence initial={false}>
         {tasks.map((task, i) => (
           <TaskItem
@@ -165,6 +175,7 @@ function TaskItem({
     ...(live ? {} : { plugins: [SortableKeyboardPlugin] }),
   });
 
+  const selected = useUI((s) => s.selection.includes(task.id));
   const kids = childMap.get(task.id) ?? [];
   const openKids = useMemo(() => kids.filter((k) => !k.completedAt), [kids]);
   const childCount = kids.length ? { done: kids.length - openKids.length, total: kids.length } : undefined;
@@ -172,6 +183,15 @@ function TaskItem({
   return (
     <motion.div
       ref={ref}
+      // The draggable element is the tree item; with role, tabindex and role description set
+      // here, dnd-kit doesn't turn it into a focusable "draggable" button.
+      role="treeitem"
+      aria-roledescription={t('a11y.task')}
+      aria-selected={selected}
+      aria-level={(options.depth ?? 0) + 1}
+      aria-expanded={nest && openKids.length > 0 ? !collapsed : undefined}
+      aria-label={taskLabel(task, today, childCount)}
+      tabIndex={-1}
       initial={{ height: 0, opacity: 0 }}
       animate={{ height: 'auto', opacity: 1 }}
       exit={{ height: 0, opacity: 0, transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] } }}
@@ -197,4 +217,17 @@ function TaskItem({
       )}
     </motion.div>
   );
+}
+
+/** What a screen reader says for a row: title, done state, date, priority, subtask progress. */
+function taskLabel(task: Task, today: string, kids?: { done: number; total: number }): string {
+  return [
+    task.title || t('task.untitled'),
+    task.completedAt ? t('a11y.done') : null,
+    task.scheduled ? formatScheduled(task.scheduled, today) : null,
+    task.priority ? t(`priority.${task.priority}` as 'priority.1') : null,
+    kids ? t('a11y.subtasks', kids) : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
 }
