@@ -114,28 +114,32 @@ export function TaskList({
     tasks.map((t) => t.id),
   );
   if (!tasks.length && empty) return <>{empty}</>;
+  const rows = (
+    <AnimatePresence initial={false}>
+      {tasks.map((task, i) => (
+        <TaskItem
+          key={task.id}
+          task={task}
+          index={i}
+          group={group}
+          today={today}
+          options={{ ...options, depth }}
+          nest={nest}
+          childMap={childMap}
+        />
+      ))}
+    </AnimatePresence>
+  );
+  // A tree: rows can hold subtasks (a nested group) and buttons, which a listbox can't.
+  if (depth)
+    return (
+      <div role="group" className="flex flex-col">
+        {rows}
+      </div>
+    );
   return (
-    // A tree: rows can hold subtasks (role="group") and buttons, which a listbox can't.
-    <div
-      role={depth ? 'group' : 'tree'}
-      aria-multiselectable={depth ? undefined : true}
-      aria-label={depth ? undefined : (label ?? t('a11y.tasks'))}
-      className="flex flex-col"
-    >
-      <AnimatePresence initial={false}>
-        {tasks.map((task, i) => (
-          <TaskItem
-            key={task.id}
-            task={task}
-            index={i}
-            group={group}
-            today={today}
-            options={{ ...options, depth }}
-            nest={nest}
-            childMap={childMap}
-          />
-        ))}
-      </AnimatePresence>
+    <div role="tree" aria-multiselectable aria-label={label ?? t('a11y.tasks')} className="flex flex-col">
+      {rows}
     </div>
   );
 }
