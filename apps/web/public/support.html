@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <title>Docket 帮助 · Support</title>
+    <style>
+      :root {
+        --bg: #fbfbfc;
+        --ink: #1d2230;
+        --ink2: #5b6170;
+        --line: #e6e8ec;
+        --jade: #1f8f6a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #17191e;
+          --ink: #e8eaee;
+          --ink2: #a3a8b3;
+          --line: #2a2e36;
+          --jade: #3fb58a;
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 16px/1.7 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+      }
+      main {
+        max-width: 680px;
+        margin: 0 auto;
+        padding: 48px 20px 80px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      header img {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+      }
+      h1 {
+        font-size: 28px;
+        line-height: 1.2;
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        font-size: 18px;
+        margin: 32px 0 6px;
+      }
+      p,
+      li {
+        color: var(--ink2);
+      }
+      strong {
+        color: var(--ink);
+      }
+      a {
+        color: var(--jade);
+      }
+      .meta {
+        color: var(--ink2);
+        font-size: 14px;
+        margin: 0 0 24px;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 56px 0 40px;
+      }
+      nav {
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav><a href="#en">English</a> · <a href="/privacy.html">隐私政策</a></nav>
+      <header>
+        <img src="/icon-192.png" alt="" />
+        <h1>Docket 帮助</h1>
+      </header>
+      <p class="meta">遇到问题或有建议，请在 <a href="https://github.com/kadaliao/ai-todolist/issues">GitHub</a> 提交 issue。</p>
+
+      <h2>怎么快速添加任务？</h2>
+      <p>点右下角的 +，像说话一样输入：“明天下午3点 写周报 #工作 p1”“每周一 例会”。日期、重复、项目、标签和优先级会自动识别并高亮；点一下识别出的部分，就当作普通文字。</p>
+
+      <h2>怎么在多台设备之间同步？</h2>
+      <p>同步需要你自己的 Docket 服务器（开源，一个 Docker 容器）。部署后为每台设备创建一个令牌，在“设置 → 同步”里填入服务器地址和令牌即可。部署方法见 <a href="https://github.com/kadaliao/ai-todolist/blob/main/docs/deploy.md">部署文档</a>。不连接服务器，所有功能也都能在本机使用。</p>
+
+      <h2>小组件怎么用？（iPhone）</h2>
+      <p>长按主屏幕空白处 → 左上角“编辑” → “添加小组件” → 搜索 Docket。点任务前的圆圈直接完成，点任务打开详情，点 + 快速添加。小组件里勾选的任务会在下次打开 Docket 时正式完成，也可以撤销。</p>
+
+      <h2>怎么把网页或文字存进 Docket？</h2>
+      <p>在 Safari、备忘录、邮件等应用里点“分享”，选择 Docket。文字会成为任务标题，链接会放进备注；标题里写上“明天 #工作”同样会被识别。</p>
+
+      <h2>提醒没有响？</h2>
+      <p>请确认系统设置里允许 Docket 发送通知，并在 Docket 的“设置 → 提醒”里打开提醒。带时间的任务默认准时提醒，也可以在任务详情里加提前提醒。</p>
+
+      <h2>AI 功能怎么开启？</h2>
+      <p>AI 功能由你自己的服务器提供，在服务器上配置任意 OpenAI 兼容的模型即可。AI 生成的任务会先给你预览，确认后才添加，也可以一键撤销。</p>
+
+      <hr />
+
+      <section id="en" lang="en">
+        <header>
+          <img src="/icon-192.png" alt="" />
+          <h1>Docket Support</h1>
+        </header>
+        <p class="meta">Found a problem or have an idea? Open an issue on <a href="https://github.com/kadaliao/ai-todolist/issues">GitHub</a>. See also the <a href="/privacy.html#en">privacy policy</a>.</p>
+
+        <h2>How do I add tasks quickly?</h2>
+        <p>Tap + and type the way you'd say it: “Write the report tomorrow 3pm #Work p1”, “every Monday standup”. Dates, repeats, projects, labels and priority are recognized and highlighted; tap a highlighted part to keep it as plain text.</p>
+
+        <h2>How do I sync between devices?</h2>
+        <p>Sync uses your own Docket server (open source, a single Docker container). Create a token for each device, then enter the server address and token in Settings → Sync. See the <a href="https://github.com/kadaliao/ai-todolist/blob/main/docs/deploy.md">deployment guide</a>. Everything works on the device without a server too.</p>
+
+        <h2>How do I use the widgets? (iPhone)</h2>
+        <p>Touch and hold the Home Screen → Edit → Add Widget → search for Docket. Tap a circle to complete a task, tap a task to open it, tap + to add one. Tasks checked off in the widget are completed when you next open Docket, and you can undo it there.</p>
+
+        <h2>How do I save a page or some text to Docket?</h2>
+        <p>Tap Share in Safari, Notes, Mail or any app and choose Docket. The text becomes the task title and the link goes into its notes; “tomorrow #Work” in the title is recognized too.</p>
+
+        <h2>My reminder didn't go off</h2>
+        <p>Make sure notifications are allowed for Docket in system Settings and that reminders are on in Docket's Settings → Reminders. Tasks with a time remind you on time by default; add earlier reminders in the task details.</p>
+
+        <h2>How do I turn on AI?</h2>
+        <p>AI is provided by your own server: configure any OpenAI-compatible model there. Tasks drafted by AI are shown for you to review before they're added, and can be undone in one tap.</p>
+      </section>
+    </main>
+  </body>
+</html>

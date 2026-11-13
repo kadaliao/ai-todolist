@@ -1,6 +1,6 @@
 // Docket service worker: the app shell works offline; data lives in IndexedDB and syncs itself.
 // API and MCP requests are never cached.
-const CACHE = 'docket-shell-v1';
+const CACHE = 'docket-shell-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/icon-192.png'];
 
 self.addEventListener('install', (event) => {
@@ -27,6 +27,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/mcp')) return;
+
+  // Standalone pages (privacy policy, support) are plain documents, not the app shell.
+  if (url.pathname.endsWith('.html') && url.pathname !== '/index.html') return;
 
   if (req.mode === 'navigate') {
     // Network first so a deploy shows up right away; cached shell when offline.

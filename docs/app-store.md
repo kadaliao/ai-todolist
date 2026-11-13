@@ -63,7 +63,7 @@ Docket is a calm, fast to-do list.
 - 任务数据保存在设备上。只有用户自己在设置里填写服务器地址后，才会同步到**用户自己部署的**服务器。
 - 使用 AI 时，文字经用户的服务器转发给用户在服务器上配置的模型提供方。
 - 权限：通知（提醒）；麦克风 / 语音识别仅在用户主动口述时使用（iOS 键盘自带听写不需要额外权限）。
-- 隐私政策要点：同上，另需一个可访问的网址（上架时填写）。
+- 隐私政策与支持页面：网页版自带 `/privacy.html` 和 `/support.html`（中英双语，源文件在 `apps/web/public/`），部署好服务器后把这两个网址填进 App Store Connect 和 Google Play。
 
 ## 审核备注（Review Notes）
 
@@ -80,7 +80,7 @@ npx eas-cli submit --platform ios
 npx eas-cli build --platform android --profile production
 ```
 
-首次提交前需要：Apple Developer 账号和 App Store Connect 应用记录、Google Play 开发者账号、隐私政策网址、支持网址。
+首次提交前需要：Apple Developer 账号和 App Store Connect 应用记录、Google Play 开发者账号；隐私政策和支持网址用服务器上的 `/privacy.html`、`/support.html`。
 
 iOS 还需要：
 
