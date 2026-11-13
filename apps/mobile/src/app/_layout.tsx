@@ -26,6 +26,7 @@ void SplashScreen.preventAutoHideAsync();
 /** The device's preferred language (Hermes' Intl always reports en-US, so ask the OS). */
 function systemLanguage(): string {
   try {
+    if (Platform.OS === 'web') return globalThis.navigator?.language ?? 'en';
     if (Platform.OS === 'ios')
       return String((Settings.get('AppleLanguages') as string[] | undefined)?.[0] ?? 'en');
     return String(I18nManager.getConstants().localeIdentifier ?? 'en');

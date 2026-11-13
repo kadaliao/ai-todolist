@@ -1,4 +1,5 @@
 import { File, Paths } from 'expo-file-system';
+import { Platform } from 'react-native';
 
 /**
  * Small JSON files in the app's document directory: the replica snapshot and settings.
@@ -10,7 +11,14 @@ function file(name: string): File {
   return new File(Paths.document, name);
 }
 
+// On the web (react-native-web preview) there is no app document directory: use localStorage.
+const web = Platform.OS === 'web';
+
 export function readJson<T>(name: string): T | undefined {
+  if (web) {
+    const raw = globalThis.localStorage?.getItem(`docket:${name}`);
+    return raw ? (JSON.parse(raw) as T) : undefined;
+  }
   const f = file(name);
   if (!f.exists) return undefined;
   try {
@@ -22,6 +30,10 @@ export function readJson<T>(name: string): T | undefined {
 }
 
 export function writeJson(name: string, value: unknown): void {
+  if (web) {
+    globalThis.localStorage?.setItem(`docket:${name}`, JSON.stringify(value));
+    return;
+  }
   const tmp = file(`${name}.tmp`);
   if (tmp.exists) tmp.delete();
   tmp.create();
@@ -32,6 +44,10 @@ export function writeJson(name: string, value: unknown): void {
 }
 
 export function removeFile(name: string): void {
+  if (web) {
+    globalThis.localStorage?.removeItem(`docket:${name}`);
+    return;
+  }
   const f = file(name);
   if (f.exists) f.delete();
 }

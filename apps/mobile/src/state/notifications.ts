@@ -13,14 +13,15 @@ import { getSetting, setSetting } from './storage';
  * two weeks). Tapping a notification opens the task.
  */
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+if (Platform.OS !== 'web')
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
 
 interface NotifyState {
   permission: 'granted' | 'denied' | 'undetermined';
@@ -61,6 +62,8 @@ export async function requestPermission(): Promise<boolean> {
 }
 
 export function startNotifications(replica: Replica): () => void {
+  // OS notifications are native-only (the web preview has none).
+  if (Platform.OS === 'web') return () => {};
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastPlan = '';
 
