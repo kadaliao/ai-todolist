@@ -50,6 +50,8 @@ export async function loadReplica(): Promise<Replica> {
   if (!snap && !(await get<boolean>(NO_SEED, db))) {
     await set(SEED_TX, seedOnboarding(replica), db);
   }
+  // Persist the starting state right away, so a reload before the first edit doesn't re-seed.
+  if (!snap) await set(SNAPSHOT, replica.snapshot(), db);
   attachPersistence(replica);
   return replica;
 }

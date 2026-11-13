@@ -1,5 +1,5 @@
-import { addDays, upcoming } from '@ai-todo/core';
-import { daysBetween, formatDay, getLocale, t, weekdayName } from '@ai-todo/shared';
+import { upcoming } from '@ai-todo/core';
+import { daysBetween, formatDay, formatMonthDay, getLocale, t, weekdayName } from '@ai-todo/shared';
 import { router } from 'expo-router';
 import { Plus } from 'lucide-react-native';
 import { useState } from 'react';
@@ -19,7 +19,7 @@ export default function UpcomingScreen() {
     <Screen title={t('nav.upcoming')}>
       {buckets.map((b) => {
         const diff = daysBetween(today, b.date);
-        const [, m, d] = b.date.split('-').map(Number) as [number, number, number];
+        const [, , d] = b.date.split('-').map(Number) as [number, number, number];
         const empty = !b.tasks.length;
         return (
           <View key={b.date} style={{ marginTop: empty ? 4 : 14 }}>
@@ -28,11 +28,7 @@ export default function UpcomingScreen() {
               <Txt variant="section" tone={diff === 0 ? c.jade : empty ? c.ink3 : c.ink}>
                 {diff <= 1 ? formatDay(b.date, today) : weekdayName(b.date)}
               </Txt>
-              {diff > 1 && (
-                <Txt variant="meta">
-                  {getLocale() === 'zh' ? `${m}月${d}日` : formatDay(b.date, addDays(b.date, -400))}
-                </Txt>
-              )}
+              {diff > 1 && <Txt variant="meta">{formatMonthDay(b.date)}</Txt>}
               <View style={{ flex: 1 }} />
               <Press
                 onPress={() => router.push({ pathname: '/add', params: { date: b.date } })}

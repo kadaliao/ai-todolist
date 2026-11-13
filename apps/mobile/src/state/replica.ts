@@ -12,7 +12,8 @@ import {
 import { t } from '@ai-todo/shared';
 import { randomUUID } from 'expo-crypto';
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform, Settings } from 'react-native';
+import { seedDemo } from './demo';
 import { getSetting, readJson, removeFile, setSetting, writeJson } from './storage';
 
 /**
@@ -43,9 +44,20 @@ export function loadReplica(): Replica {
     console.warn('snapshot unreadable, starting fresh', e);
     replica = new Replica(opts);
   }
-  if (!snap && !getSetting<boolean>('noSeed')) setSetting('seedTx', seed(replica));
+  if (!snap && wantsDemo()) seedDemo(replica);
+  else if (!snap && !getSetting<boolean>('noSeed')) setSetting('seedTx', seed(replica));
+  // Persist the starting state right away, so a restart before the first edit doesn't re-seed.
+  if (!snap) writeJson(SNAPSHOT, replica.snapshot());
   attachPersistence(replica);
   return replica;
+}
+
+/** Development only: start with demo data (store screenshots). */
+function wantsDemo(): boolean {
+  if (!__DEV__) return false;
+  if (Platform.OS === 'web') return /[?&]demo=1/.test(globalThis.location?.search ?? '');
+  if (Platform.OS === 'ios') return !!Settings.get('docketDemo');
+  return false;
 }
 
 function seed(r: Replica): string[] {

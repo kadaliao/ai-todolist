@@ -1,5 +1,4 @@
 import {
-  addDays,
   archiveProject,
   createSection,
   deleteSection,
@@ -16,7 +15,7 @@ import {
   updateProject,
   updateSection,
 } from '@ai-todo/core';
-import { daysBetween, formatDay, getLocale, t, weekdayName } from '@ai-todo/shared';
+import { daysBetween, formatDay, formatMonthDay, getLocale, t, weekdayName } from '@ai-todo/shared';
 import { useDroppable } from '@dnd-kit/react';
 import { Archive, Hash, MoreHorizontal, Pencil, Plus, Repeat, RotateCcw, Tag, Trash2 } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
@@ -238,7 +237,7 @@ export function UpcomingView() {
       <div className="flex flex-col">
         {buckets.map((b) => {
           const diff = daysBetween(today, b.date);
-          const [, m, day] = b.date.split('-').map(Number) as [number, number, number];
+          const [, , day] = b.date.split('-').map(Number) as [number, number, number];
           const empty = !b.tasks.length && adding !== b.date;
           return (
             <section key={b.date} className={empty ? 'pt-2' : 'pb-3 pt-4'}>
@@ -260,13 +259,7 @@ export function UpcomingView() {
                   >
                     {diff <= 1 ? formatDay(b.date, today) : weekdayName(b.date)}
                   </span>
-                  {diff > 1 && (
-                    <span className="text-[12px] text-ink-3">
-                      {getLocale() === 'zh'
-                        ? `${m}月${day}日`
-                        : formatDay(b.date, addDays(b.date, -400)).replace(/,? \d{4}$/, '')}
-                    </span>
-                  )}
+                  {diff > 1 && <span className="text-[12px] text-ink-3">{formatMonthDay(b.date)}</span>}
                   <button
                     type="button"
                     aria-label={t('qa.placeholderShort')}

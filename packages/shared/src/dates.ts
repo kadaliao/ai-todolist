@@ -161,3 +161,14 @@ export function monthTitle(year: number, month: number): string {
     timeZone: 'UTC',
   });
 }
+
+/** Month and day without the year: 11月15日 / Nov 15. */
+export function formatMonthDay(date: LocalDate): string {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  if (getLocale() === 'zh') return `${m}月${d}日`;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
