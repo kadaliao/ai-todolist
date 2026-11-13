@@ -2,7 +2,7 @@
   "expo": {
     "name": "Docket",
     "slug": "docket",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "scheme": "docket",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

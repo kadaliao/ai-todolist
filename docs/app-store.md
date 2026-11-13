@@ -21,7 +21,7 @@ iPhone 截图来自网页预览加演示数据；小组件和 iPad 截图来自�
 | 年龄分级  | 4+                                          |
 | 价格      | 免费                                        |
 | Bundle ID | `com.kadaliao.docket`（iOS / Android 相同） |
-| 版本      | 1.0.0                                       |
+| 版本      | 1.0.1                                       |
 
 ## 中文
 
