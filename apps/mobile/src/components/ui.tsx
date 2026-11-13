@@ -29,7 +29,14 @@ export function Txt({
     section: { fontSize: 14, lineHeight: 18, fontWeight: '600' as const, color: c.ink },
     display: { fontSize: 52, lineHeight: 52, fontFamily: fonts.display, letterSpacing: -2, color: c.jade },
   }[variant];
-  return <Text {...props} style={[base, tone ? { color: tone } : null, style]} />;
+  // Dynamic Type: text grows with the user's setting, but headings that are already large grow
+  // less, so the largest accessibility sizes stay readable instead of breaking every line.
+  const maxScale = { display: 1.2, large: 1.35, title: 2, section: 2, body: 2.6, label: 2.6, meta: 2.6 }[
+    variant
+  ];
+  return (
+    <Text maxFontSizeMultiplier={maxScale} {...props} style={[base, tone ? { color: tone } : null, style]} />
+  );
 }
 
 /** Press feedback with a small spring scale (respects the platform's reduced-motion via Reanimated). */
