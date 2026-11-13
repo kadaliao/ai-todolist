@@ -4,10 +4,12 @@ WORKDIR /src
 RUN npm install -g pnpm@8.7.5 >/dev/null
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY packages/core/package.json packages/core/
+COPY packages/shared/package.json packages/shared/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter @ai-todo/server... --filter @ai-todo/web...
 COPY packages/core packages/core
+COPY packages/shared packages/shared
 COPY apps/server apps/server
 COPY apps/web apps/web
 RUN pnpm --filter @ai-todo/web build && pnpm --filter @ai-todo/server build
