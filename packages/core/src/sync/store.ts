@@ -1,3 +1,4 @@
+import { clone } from '../clone';
 import { type Actor, DEFAULTS, ENTITY_TYPES, type EntityMap, type EntityType } from '../model';
 import type { Hlc } from './hlc';
 
@@ -88,9 +89,9 @@ export class Store {
       cache.set(id, null);
       return undefined;
     }
-    const obj: Record<string, unknown> = { ...structuredClone(DEFAULTS[entity]), id };
+    const obj: Record<string, unknown> = { ...clone(DEFAULTS[entity]), id };
     for (const [field, c] of row) {
-      if (c.value !== null) obj[field] = structuredClone(c.value);
+      if (c.value !== null) obj[field] = clone(c.value);
     }
     const value = deepFreeze(obj) as unknown as EntityMap[K];
     cache.set(id, value);

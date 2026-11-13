@@ -1,3 +1,4 @@
+export { clone } from './clone';
 export * from './commands';
 export * from './model';
 export * from './order';
@@ -19,6 +20,15 @@ export {
   startRecurrence,
 } from './recurrence';
 export * from './replica';
+export {
+  checkServer,
+  normalizeServerUrl,
+  SyncClient,
+  type SyncClientOptions,
+  type SyncState,
+  type SyncStatus,
+  type SyncStorage,
+} from './sync/client';
 export { createClock, decode as decodeHlc, type Hlc, type HlcState } from './sync/hlc';
 export { type Cell, type Json, type Mutation, type Op, Store } from './sync/store';
 export * from './time';

@@ -1,3 +1,4 @@
+import { clone } from './clone';
 import { DEFAULTS, ENTITY_TYPES, type EntityMap, type EntityType } from './model';
 import type { Json, Mutation } from './sync/store';
 
@@ -35,9 +36,9 @@ export class Overlay implements ReadStore {
     const createdAt = row.has('createdAt') ? row.get('createdAt') : base?.createdAt;
     if (createdAt === null || createdAt === undefined) return undefined;
     const defaults = DEFAULTS[entity] as Record<string, unknown>;
-    const obj: Record<string, unknown> = base ? { ...base } : { ...structuredClone(defaults), id };
+    const obj: Record<string, unknown> = base ? { ...base } : { ...clone(defaults), id };
     for (const [field, value] of row) {
-      obj[field] = value === null ? structuredClone(defaults[field] ?? null) : structuredClone(value);
+      obj[field] = value === null ? clone(defaults[field] ?? null) : clone(value);
     }
     return obj as unknown as EntityMap[K];
   }
