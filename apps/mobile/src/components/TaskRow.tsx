@@ -1,5 +1,5 @@
 import { addDays, type Task } from '@ai-todo/core';
-import { dateTone, formatScheduled, formatTime, t } from '@ai-todo/shared';
+import { dateTone, describeRecurrence, formatScheduled, formatTime, t } from '@ai-todo/shared';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { CalendarDays, Check, FileText, Repeat, Sparkles, SunMedium, Trash2 } from 'lucide-react-native';
@@ -78,6 +78,28 @@ export const TaskRow = memo(function TaskRow({
   const tone = dateTone(task.scheduled, today);
   const dateColor = tone === 'overdue' ? c.p1 : tone === 'today' ? c.jade : c.ink2;
 
+  const open = () => router.push({ pathname: '/task/[id]', params: { id: task.id } });
+  // VoiceOver / TalkBack read the row as one element; the swipe actions are offered as actions.
+  const a11yLabel = [
+    task.title || t('task.untitled'),
+    done ? t('a11y.done') : null,
+    task.scheduled ? formatScheduled(task.scheduled, today) : null,
+    task.recurrence ? describeRecurrence(task.recurrence) : null,
+    task.priority ? t(`priority.${task.priority}` as 'priority.1') : null,
+    meta.project?.name ?? null,
+    ...meta.labels.map((l) => l.name),
+    meta.kids ? t('a11y.subtasks', meta.kids) : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  const onA11yAction = (name: string) => {
+    if (name === 'activate') open();
+    else if (name === 'complete') complete();
+    else if (name === 'tomorrow') void schedule([task.id], addDays(today, 1));
+    else if (name === 'schedule') router.push({ pathname: '/schedule', params: { ids: task.id } });
+    else if (name === 'delete') removeTasks([task.id]);
+  };
+
   return (
     <Animated.View
       entering={FadeIn.duration(180)}
@@ -132,7 +154,18 @@ export const TaskRow = memo(function TaskRow({
         }}
       >
         <Pressable
-          onPress={() => router.push({ pathname: '/task/[id]', params: { id: task.id } })}
+          onPress={open}
+          accessibilityRole="button"
+          accessibilityLabel={a11yLabel}
+          accessibilityHint={t('task.openDetail')}
+          accessibilityActions={[
+            { name: 'activate' },
+            { name: 'complete', label: done ? t('task.reopen') : t('task.complete') },
+            { name: 'tomorrow', label: t('a11y.toTomorrow') },
+            { name: 'schedule', label: t('task.schedule') },
+            { name: 'delete', label: t('delete') },
+          ]}
+          onAccessibilityAction={(e) => onA11yAction(e.nativeEvent.actionName)}
           style={({ pressed }) => [
             styles.row,
             { backgroundColor: pressed ? c.active : c.bg, paddingLeft: 20 + depth * 28 },
