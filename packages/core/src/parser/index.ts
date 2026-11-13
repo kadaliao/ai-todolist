@@ -97,11 +97,22 @@ export function parseQuickAdd(input: string, opts: QuickAddOptions): QuickAddRes
   }
 
   const date = matchDate(text, chronoRef(opts.now, opts.timeZone), ignore);
-  if (date) tokens.push({ kind: 'date', start: date.start, end: date.end, text: date.text });
+  if (date) {
+    // Absorb connector words so they don't litter the title: 从下周开始 / 周五之前 / by Friday.
+    const before = /(?:从|在|于|\b(?:by|on|at|before|due|starting|from|until)\s+)$/i.exec(
+      text.slice(0, date.start),
+    );
+    const after = /^(?:之前|以前|前|开始|以内|左右|为止)/.exec(text.slice(date.end));
+    const start = date.start - (before?.[0].length ?? 0);
+    const end = date.end + (after?.[0].length ?? 0);
+    tokens.push({ kind: 'date', start, end, text: input.slice(start, end) });
+  }
 
   if (rec) {
     result.recurrence = { rule: rec.rule, from: rec.from };
-    let start = date?.dayCertain ? date.date : null;
+    // "每周一早上": 早上 alone makes chrono treat the day as today, but it only names a time of
+    // day; the series should start on its first Monday, not today.
+    let start = date?.dayCertain && namesADay(date.text) ? date.date : null;
     if (!start) {
       start = occurrenceAfter(rec.rule, wall.date, wall.date, true);
       // "每天早上8点" typed at 10:00: today's 8:00 is gone, start tomorrow.
@@ -136,6 +147,14 @@ export function parseQuickAdd(input: string, opts: QuickAddOptions): QuickAddRes
   title += input.slice(pos);
   result.title = title.replace(/\s+/g, ' ').trim();
   return result;
+}
+
+const TIME_OF_DAY =
+  /(?:早上|早晨|清晨|上午|中午|下午|傍晚|晚上|夜里|夜间|凌晨|今晚|tonight|morning|afternoon|evening|night|noon|midnight|at|in the|\d{1,2}\s*[:：.]\s*\d{2}|[\d零〇一二两三四五六七八九十]+\s*(?:点|时)(?:半|一刻|三刻|[\d零〇一二两三四五六七八九十]+分?)?|\d{1,2}\s*(?:am|pm|a\.m\.|p\.m\.)|\s)/gi;
+
+/** Does a date phrase name a day (明天, 周五, 11月20日) rather than just a time of day (早上8点)? */
+function namesADay(text: string): boolean {
+  return text.replace(TIME_OF_DAY, '').length > 0;
 }
 
 /** Map a parse result to `createTask` input, given ids for names that didn't match anything. */

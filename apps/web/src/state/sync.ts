@@ -1,7 +1,7 @@
 import type { Op, Replica } from '@ai-todo/core';
 import { create } from 'zustand';
 import { t } from '../lib/i18n';
-import { getSetting, setSetting } from './replica';
+import { getSetting, isPristine, resetForSync, setSetting } from './replica';
 
 /**
  * Sync with docket-server.
@@ -247,8 +247,16 @@ export async function connectSync(replica: Replica, config: SyncConfig): Promise
   });
   if (res.status === 401) throw new Error(getLocaleSafe('令牌无效', 'Invalid token'));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const health = (await res.json()) as { cursor?: number };
   client?.stop();
   await setSetting('sync.config', { url, token: config.token });
+  if ((health.cursor ?? 0) > 0 && (await isPristine(replica))) {
+    // The account already has data and this device only has the sample tasks: start from the
+    // account instead of merging a second set of samples into it.
+    await resetForSync();
+    location.reload();
+    return;
+  }
   client = new SyncClient(replica, { url, token: config.token });
   await client.start();
 }

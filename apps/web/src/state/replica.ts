@@ -47,18 +47,50 @@ export async function loadReplica(): Promise<Replica> {
     console.error('snapshot unreadable, starting fresh', e);
     replica = new Replica({ deviceId, timeZone: timeZone() });
   }
-  if (!snap) seedOnboarding(replica);
+  if (!snap && !(await get<boolean>(NO_SEED, db))) {
+    await set(SEED_TX, seedOnboarding(replica), db);
+  }
   attachPersistence(replica);
   return replica;
 }
 
+const SEED_TX = 'seedTx';
+const NO_SEED = 'noSeed';
+
+/**
+ * True while this device holds nothing but the untouched onboarding samples (every local op
+ * belongs to the seeding). Connecting such a device to an account that already has data should
+ * adopt that data rather than merge a second copy of the samples into it.
+ */
+export async function isPristine(r: Replica): Promise<boolean> {
+  const seed = new Set((await get<string[]>(SEED_TX, db)) ?? []);
+  const pending = r.pending();
+  return seed.size > 0 && pending.length > 0 && pending.every((op) => seed.has(op.tx));
+}
+
+/** Drop local data (keeping the device id) so the next load starts empty and pulls everything. */
+export async function resetForSync(): Promise<void> {
+  clearTimeout(saveTimer);
+  saveTimer = undefined;
+  discarded = true;
+  await del(SNAPSHOT, db);
+  await set(NO_SEED, true, db);
+}
+
+let discarded = false;
+
 /** A handful of tasks that teach the app by doing. Not undoable, so ⌘Z starts clean. */
-function seedOnboarding(r: Replica): void {
+function seedOnboarding(r: Replica): string[] {
+  const txs: string[] = [];
   const today = todayIn(new Date(), r.timeZone);
-  const { result: project } = r.dispatch(createProject({ name: t('onboarding.project'), color: '#3d6fd9' }), {
-    undoable: false,
-  });
-  r.dispatch(
+  const { result: project, tx: t1 } = r.dispatch(
+    createProject({ name: t('onboarding.project'), color: '#3d6fd9' }),
+    {
+      undoable: false,
+    },
+  );
+  txs.push(t1.tx);
+  const { tx: t2 } = r.dispatch(
     createTasks([
       { title: t('onboarding.1'), scheduled: { date: today }, notes: t('onboarding.notes'), priority: 3 },
       { title: t('onboarding.2'), scheduled: { date: today } },
@@ -67,7 +99,8 @@ function seedOnboarding(r: Replica): void {
     ]),
     { undoable: false },
   );
-  r.dispatch(
+  txs.push(t2.tx);
+  const { tx: t3 } = r.dispatch(
     createTask({
       title: t('onboarding.5'),
       projectId: project,
@@ -76,6 +109,8 @@ function seedOnboarding(r: Replica): void {
     }),
     { undoable: false },
   );
+  txs.push(t3.tx);
+  return txs;
 }
 
 function nextMonday(today: string): string {
@@ -88,6 +123,7 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined;
 async function save(r: Replica): Promise<void> {
   clearTimeout(saveTimer);
   saveTimer = undefined;
+  if (discarded) return;
   await set(SNAPSHOT, r.snapshot(), db);
 }
 

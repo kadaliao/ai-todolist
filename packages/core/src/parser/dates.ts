@@ -162,6 +162,17 @@ export function matchDate(
 
   const dayCertain = r.start.isCertain('day') || r.start.isCertain('weekday');
   let date = formatDate(r.start.get('year') ?? 0, r.start.get('month') ?? 1, r.start.get('day') ?? 1);
+  // A bare weekday naming today ("周五" on a Friday) means today. chrono's choice between today
+  // and next week depends on the time of day; "下周五" / "next fri" still mean next week.
+  const todayStr = formatDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  if (
+    r.start.isCertain('weekday') &&
+    !r.start.isCertain('day') &&
+    date === addDays(todayStr, 7) &&
+    !/下|next/i.test(r.text)
+  ) {
+    date = todayStr;
+  }
   let time: LocalTime | undefined;
   let duration: number | undefined;
   if (r.start.isCertain('hour')) {

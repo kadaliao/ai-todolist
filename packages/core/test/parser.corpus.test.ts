@@ -105,6 +105,20 @@ const cases: Case[] = [
   },
   { in: '每周一下午3点周会', title: '周会', date: '2026-11-16', time: '15:00', rule: 'FREQ=WEEKLY;BYDAY=MO' },
   { in: '每周一次大扫除', title: '大扫除', date: '2026-11-13', rule: 'FREQ=WEEKLY' },
+  { in: '每周一早上健身', title: '健身', date: '2026-11-16', rule: 'FREQ=WEEKLY;BYDAY=MO' },
+  { in: '每天晚上背单词', title: '背单词', date: '2026-11-13', rule: 'FREQ=DAILY' },
+  { in: '每周一 从下周开始 例会', title: '例会', date: '2026-11-16', rule: 'FREQ=WEEKLY;BYDAY=MO' },
+  {
+    in: 'Gym every monday 7am',
+    title: 'Gym',
+    date: '2026-11-16',
+    time: '07:00',
+    rule: 'FREQ=WEEKLY;BYDAY=MO',
+  },
+  { in: '周五之前交房租', title: '交房租', date: '2026-11-13' },
+  { in: '下周三前提交报销', title: '提交报销', date: '2026-11-18' },
+  { in: 'Pay rent by friday', title: 'Pay rent', date: '2026-11-13' },
+  { in: 'Report due next fri', title: 'Report', date: '2026-11-20' },
 
   // --- English
   { in: 'Call mom tomorrow 3pm', title: 'Call mom', date: '2026-11-14', time: '15:00' },
@@ -251,6 +265,14 @@ describe('quick-add tokens', () => {
     expect(late.scheduled?.date).toBe('2026-11-14');
     const ny = parseQuickAdd('明天开会', { ...BASE, timeZone: 'America/New_York' });
     expect(ny.scheduled?.date).toBe('2026-11-13'); // it's 21:00 on the 12th in New York
+  });
+
+  it('a bare weekday naming today means today at any time of day', () => {
+    for (const hour of ['01:00', '10:00', '15:00', '23:30']) {
+      const now = new Date(`2026-11-13T${hour}:00+08:00`);
+      expect(parseQuickAdd('周五交房租', { ...BASE, now }).scheduled?.date, hour).toBe('2026-11-13');
+      expect(parseQuickAdd('下周五交房租', { ...BASE, now }).scheduled?.date, hour).toBe('2026-11-20');
+    }
   });
 
   it('is fast', () => {
