@@ -98,3 +98,13 @@ iOS 还需要：
 - 三个 Bundle ID：`com.kadaliao.docket`、`com.kadaliao.docket.widget`、`com.kadaliao.docket.share`，都开启 App Groups 并勾选 `group.com.kadaliao.docket`。用 EAS 构建时，它会按 `@bacons/apple-targets` 写入的扩展信息自动创建这些标识和描述文件。
 
 截图里的小组件图（`*-widgets.png`）来自模拟器主屏幕：先在模拟器里放上小组件并截图到 `assets/store/raw/<语言>-widgets.png`，再运行截图脚本加标题和外框。
+
+## 本地发布（不经 EAS）
+
+把以下变量放进仓库根目录的 `.env.release`（已被 `.gitignore` 忽略）：`APPLE_TEAM_ID`、`ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_PATH`（App Store Connect API 密钥）。
+
+- **macOS**：`xcrun notarytool store-credentials docket-notary --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID"` 存一次公证配置，之后
+  `APPLE_SIGNING_IDENTITY="Developer ID Application: …" APPLE_API_ISSUER=$ASC_ISSUER_ID APPLE_API_KEY=$ASC_KEY_ID APPLE_API_KEY_PATH=$ASC_KEY_PATH DOCKET_NOTARY_PROFILE=docket-notary pnpm --filter @ai-todo/desktop build`
+  产出已签名、已公证并装订的 `Docket.app` 和 DMG。发布到 GitHub Release 后，Homebrew cask `kadaliao/tap/docket` 会自动跟上。
+- **Android**：上传密钥放在仓库外，构建时用 `-Pandroid.injected.signing.store.file / store.password / key.alias / key.password` 传给 `./gradlew :app:bundleRelease`（Google Play 用的 AAB）或 `:app:assembleRelease`（直接安装的 APK）。
+- **iOS**：API 密钥需要 Admin 角色，`xcodebuild archive -allowProvisioningUpdates -authenticationKeyPath … -authenticationKeyID … -authenticationKeyIssuerID …` 才能自动注册 Bundle ID、App Group 并生成描述文件；权限不够时这一步要在开发者网站上完成。App Store Connect 里的应用记录只能在网页上创建。
