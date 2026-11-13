@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Docket",
+    "slug": "docket",
+    "version": "0.1.0",
+    "scheme": "docket",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "app.docket.mobile",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "Docket uses the microphone when you dictate tasks.",
+        "NSSpeechRecognitionUsageDescription": "Docket turns your dictation into tasks."
+      }
+    },
+    "android": {
+      "package": "app.docket.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1F8F6A"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "backgroundColor": "#FBFBFC",
+          "dark": { "backgroundColor": "#17191E" }
+        }
+      ],
+      ["expo-notifications", { "enableRemoteNotifications": false, "color": "#1F8F6A" }]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}

@@ -43,7 +43,11 @@ test('drag to reorder within a list (persists across reload)', async ({ page }) 
 });
 
 test('drag onto a sidebar project moves the task', async ({ page }) => {
-  await drag(page, rows(page).filter({ hasText: '乙' }), page.locator('nav').getByRole('button', { name: /工作/ }));
+  await drag(
+    page,
+    rows(page).filter({ hasText: '乙' }),
+    page.locator('nav').getByRole('button', { name: /工作/ }),
+  );
   await expect(rows(page)).toHaveText(['甲', '丙']);
   await expect(page.getByText(/已移动到 工作/)).toBeVisible();
 });

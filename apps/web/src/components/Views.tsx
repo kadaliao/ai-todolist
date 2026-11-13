@@ -33,11 +33,14 @@ export function ViewHeader({
   sub,
   actions,
   numeral,
+  dot,
 }: {
   title: string;
   sub?: ReactNode;
   actions?: ReactNode;
   numeral?: string;
+  /** Project color shown before the title. */
+  dot?: string | null;
 }) {
   return (
     <header className="flex items-end gap-3 pb-4 pt-7">
@@ -50,7 +53,14 @@ export function ViewHeader({
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <h1 className="truncate font-display text-[26px] font-[650] leading-[1.05] tracking-[-0.02em]">
+        <h1 className="flex items-center gap-2.5 truncate font-display text-[26px] font-[650] leading-[1.05] tracking-[-0.02em]">
+          {dot !== undefined && (
+            <span
+              className="size-[11px] shrink-0 rounded-full"
+              style={{ background: dot ?? 'var(--ink-3)' }}
+              aria-hidden
+            />
+          )}
           {title}
         </h1>
         {sub && <div className="mt-1 text-[12.5px] text-ink-3">{sub}</div>}
@@ -330,6 +340,7 @@ export function ProjectPage({ id }: { id: string }) {
     <Page>
       <ViewHeader
         title={view.project.name}
+        dot={view.project.color}
         sub={total ? t('count.tasks', { n: total }) : undefined}
         actions={<ProjectMenu id={id} onAddSection={() => setAddingSection(true)} />}
       />
