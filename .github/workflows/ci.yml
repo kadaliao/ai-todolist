@@ -1,0 +1,31 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.7.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm --filter @ai-todo/core --filter @ai-todo/shared --filter @ai-todo/web --filter @ai-todo/server typecheck
+      - run: pnpm --filter @ai-todo/core --filter @ai-todo/web --filter @ai-todo/server test
+      - run: pnpm --filter @ai-todo/core test:polyfill
+      - run: pnpm --filter @ai-todo/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @ai-todo/web e2e
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t docket-server:ci .
