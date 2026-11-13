@@ -14,6 +14,8 @@ type Modules = {
   rep: typeof import('./state/replica');
   actions: typeof import('./state/actions');
   sync: typeof import('./state/sync');
+  reminders: typeof import('./state/reminders');
+  platform: typeof import('./platform');
   i18n: typeof import('./lib/i18n');
   InstanceBlocked: typeof import('./components/Overlays').InstanceBlocked;
 };
@@ -23,7 +25,7 @@ let mods: Modules;
 let booting: Promise<void> | null = null;
 
 function Root() {
-  const { App, rep, actions, sync, i18n, InstanceBlocked } = mods;
+  const { App, rep, actions, sync, i18n, InstanceBlocked, reminders, platform } = mods;
   const [replica, setReplica] = useState<Replica | null>(null);
   const [blocked, setBlocked] = useState(false);
   const [locale, setLocaleState] = useState(i18n.getLocale());
@@ -40,6 +42,8 @@ function Root() {
     setBlocked(false);
     const r = await rep.loadReplica();
     actions.bindActions(r);
+    await platform.initPlatform(r);
+    reminders.startReminders(r);
     await sync.initSync(r);
     setReplica(r);
   };
@@ -67,19 +71,31 @@ function Root() {
 
 async function boot() {
   if (!(globalThis as { Temporal?: unknown }).Temporal) await import('temporal-polyfill/global');
-  const [{ App }, rep, actions, sync, i18n, overlays] = await Promise.all([
+  const i18n = await import('./lib/i18n');
+  const saved = localStorage.getItem('docket.locale');
+  i18n.setLocale(saved === 'zh' || saved === 'en' ? saved : i18n.detectLocale());
+
+  // The desktop quick-entry window is just an input; it hands the text to the main window.
+  if (location.hash.startsWith('#/quick-entry')) {
+    const [{ QuickEntry }] = await Promise.all([
+      import('./components/QuickEntry'),
+      import('./components/theme'),
+    ]);
+    createRoot(document.getElementById('root') as HTMLElement).render(<QuickEntry />);
+    return;
+  }
+
+  const [{ App }, rep, actions, sync, overlays, reminders, platform] = await Promise.all([
     import('./App'),
     import('./state/replica'),
     import('./state/actions'),
     import('./state/sync'),
-    import('./lib/i18n'),
     import('./components/Overlays'),
+    import('./state/reminders'),
+    import('./platform'),
     import('./components/theme'),
   ]);
-  mods = { App, rep, actions, sync, i18n, InstanceBlocked: overlays.InstanceBlocked };
-
-  const saved = localStorage.getItem('docket.locale');
-  i18n.setLocale(saved === 'zh' || saved === 'en' ? saved : i18n.detectLocale());
+  mods = { App, rep, actions, sync, i18n, InstanceBlocked: overlays.InstanceBlocked, reminders, platform };
 
   createRoot(document.getElementById('root') as HTMLElement).render(
     <StrictMode>

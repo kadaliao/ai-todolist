@@ -11,7 +11,7 @@ import { Calendar, Flag, Hash, Inbox, Plus, Repeat, Sparkles, Tag, X } from 'luc
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { formatScheduled } from '../lib/dates';
 import { t } from '../lib/i18n';
-import { addLabel, addProject, addTasks } from '../state/actions';
+import { addLabel, addProject, addTasks, getReplica } from '../state/actions';
 import { timeZone, useQuery, useToday } from '../state/replica';
 import { useUI } from '../state/ui';
 import { DatePicker, type RecurrenceValue } from './DatePicker';
@@ -383,6 +383,38 @@ export function QuickAdd({
       )}
     </div>
   );
+}
+
+/**
+ * Add a task from raw quick-add text (desktop quick-entry window, share targets). Parses against
+ * the current project/label names, creates unknown ones, and says where the task went.
+ */
+export function addFromText(text: string, ignore: string[] = []): void {
+  const r = getReplica();
+  const s = r.store;
+  const names: Names = {
+    projects: s
+      .all('project')
+      .filter((p) => !p.deletedAt && !p.archivedAt)
+      .map((p) => ({ id: p.id, name: p.name, color: p.color })),
+    sections: s
+      .all('section')
+      .filter((x) => !x.deletedAt)
+      .map((x) => ({ id: x.id, name: x.name, projectId: x.projectId })),
+    labels: s
+      .all('label')
+      .filter((l) => !l.deletedAt)
+      .map((l) => ({ id: l.id, name: l.name, color: l.color })),
+  };
+  const parsed = parseQuickAdd(text, { now: new Date(), timeZone: timeZone(), ...names, ignore });
+  const input = toInput(resolve(parsed, {}, {}));
+  if (!input.title) return;
+  const ids = addTasks([input]);
+  if (!ids?.[0]) return;
+  const today = r.context().today;
+  const name = input.projectId ? (s.get('project', input.projectId)?.name ?? '') : t('nav.inbox');
+  const when = input.scheduled ? ` · ${formatScheduled(input.scheduled, today)}` : '';
+  useUI.getState().toast({ message: t('toast.created', { name: name + when }) });
 }
 
 /** Will a task created here show up in the current view? If not, the toast says where it went. */

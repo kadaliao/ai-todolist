@@ -24,6 +24,8 @@
     "@dnd-kit/dom": "0.5.3",
     "@dnd-kit/react": "^0.5.3",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@tauri-apps/api": "2",
+    "@tauri-apps/plugin-notification": "2",
     "cmdk": "^1.1.1",
     "idb-keyval": "^6.3.0",
     "lucide-react": "^1.72.0",

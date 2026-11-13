@@ -338,3 +338,22 @@ button {
   transform: scaleX(1);
   transition: transform 260ms 90ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Desktop (macOS): the traffic lights sit in the sidebar's top-left corner; the window itself
+   names the app, so the logo and name step aside. */
+html.tauri-mac nav[aria-label="Sidebar"] > div:first-child {
+  padding-left: 84px;
+}
+html.tauri-mac nav[aria-label="Sidebar"] > div:first-child > :is(svg, span) {
+  display: none;
+}
+html.tauri body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+html.tauri input,
+html.tauri textarea,
+html.tauri .prose-notes {
+  user-select: text;
+  -webkit-user-select: text;
+}

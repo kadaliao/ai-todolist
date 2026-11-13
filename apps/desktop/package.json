@@ -1,0 +1,13 @@
+{
+  "name": "@ai-todo/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build && sh scripts/dmg.sh",
+    "icons": "tauri icon ../../assets/icon-macos-1024.png -o src-tauri/icons"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2"
+  }
+}

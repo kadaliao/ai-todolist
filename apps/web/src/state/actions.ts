@@ -37,6 +37,10 @@ export function bindActions(r: Replica): void {
   replica = r;
 }
 
+export function getReplica(): Replica {
+  return replica;
+}
+
 const toast = (...args: Parameters<ReturnType<typeof useUI.getState>['toast']>) =>
   useUI.getState().toast(...args);
 

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Docket",
+  "version": "0.1.0",
+  "identifier": "app.docket.desktop",
+  "build": {
+    "frontendDist": "../../web/dist",
+    "devUrl": "http://localhost:5199",
+    "beforeDevCommand": "pnpm --filter @ai-todo/web dev",
+    "beforeBuildCommand": "pnpm --filter @ai-todo/web build"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Docket",
+        "width": 1240,
+        "height": 820,
+        "minWidth": 720,
+        "minHeight": 520,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 18,
+          "y": 24
+        }
+      },
+      {
+        "label": "quick",
+        "title": "Quick Add",
+        "url": "index.html#/quick-entry",
+        "width": 680,
+        "height": 150,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "resizable": false,
+        "center": true,
+        "shadow": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "category": "Productivity",
+    "shortDescription": "A calm, fast to-do list with AI",
+    "copyright": "\u00a9 2026 Kada Liao",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
+  }
+}

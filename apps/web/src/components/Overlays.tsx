@@ -7,6 +7,7 @@ import { describeRecurrence, formatScheduled } from '../lib/dates';
 import { getLocale, type Locale, t } from '../lib/i18n';
 import { addTasks } from '../state/actions';
 import { AiError, draftToTask, type ExtractedTask, extractTasks, transcribe } from '../state/ai';
+import { requestNotificationPermission, setReminderSettings, useReminderSettings } from '../state/reminders';
 import { timeZone, useReplica, useToday } from '../state/replica';
 import { connectSync, disconnectSync, useSyncStatus, useSyncStore } from '../state/sync';
 import { useUI } from '../state/ui';
@@ -254,6 +255,8 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
           </div>
         </Section>
 
+        <RemindersSection />
+
         <Section title={t('settings.ai')}>
           <p className="text-[12.5px] leading-relaxed text-ink-3">{t('settings.ai.help')}</p>
           <p className={cx('text-[13px]', ai?.available ? 'text-jade' : 'text-ink-2')}>
@@ -285,6 +288,66 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
         </Section>
       </div>
     </Dialog>
+  );
+}
+
+function RemindersSection() {
+  const { enabled, atTimeByDefault, permission } = useReminderSettings();
+  const zh = getLocale() === 'zh';
+  return (
+    <Section title={zh ? '提醒' : 'Reminders'}>
+      <Row label={zh ? '提醒通知' : 'Reminder notifications'}>
+        {permission === 'granted' ? (
+          <Toggle checked={enabled} onChange={(v) => setReminderSettings({ enabled: v })} />
+        ) : (
+          <Button
+            size="sm"
+            onClick={() => void requestNotificationPermission()}
+            disabled={permission === 'denied'}
+          >
+            {permission === 'denied'
+              ? zh
+                ? '已被系统拒绝'
+                : 'Blocked by system'
+              : zh
+                ? '允许通知'
+                : 'Allow notifications'}
+          </Button>
+        )}
+      </Row>
+      <Row label={zh ? '有时间的任务默认准时提醒' : 'Remind at the task’s time by default'}>
+        <Toggle checked={atTimeByDefault} onChange={(v) => setReminderSettings({ atTimeByDefault: v })} />
+      </Row>
+      {permission === 'denied' && (
+        <p className="text-[12.5px] text-ink-3">
+          {zh
+            ? '请在浏览器或系统设置里允许 Docket 发送通知。'
+            : 'Allow notifications for Docket in your browser or system settings.'}
+        </p>
+      )}
+    </Section>
+  );
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={cx(
+        'relative h-[22px] w-[38px] rounded-full transition-colors',
+        checked ? 'bg-jade' : 'bg-line-strong',
+      )}
+    >
+      <span
+        className={cx(
+          'absolute top-[2px] size-[18px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-transform',
+          checked ? 'translate-x-[18px]' : 'translate-x-[2px]',
+        )}
+      />
+    </button>
   );
 }
 
