@@ -3,6 +3,9 @@ import {
   type Command,
   CommandError,
   completeTask,
+  completeTasks,
+  createLabel,
+  createProject,
   createTask,
   createTasks,
   deleteTasks,
@@ -10,10 +13,12 @@ import {
   type MoveTarget,
   moveTasks,
   type NewTask,
+  parseQuickAdd,
   type Replica,
   rescheduleOverdue,
   rescheduleTasks,
   type TaskPatch,
+  toNewTask,
   uncompleteTask,
   updateTask,
 } from '@ai-todo/core';
@@ -53,7 +58,7 @@ export function dismissToast(id: number): void {
   useToasts.setState((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) }));
 }
 
-const undoAction = () => ({ label: t('undo'), run: () => undo() });
+export const undoAction = () => ({ label: t('undo'), run: () => undo() });
 
 export function run<R>(cmd: Command<R>, actor: Actor = 'user'): R | undefined {
   try {
@@ -81,6 +86,50 @@ export function addTasks(inputs: NewTask[], actor: Actor = 'user'): string[] | u
 
 export function addTask(input: NewTask): string | undefined {
   return run(createTask(input));
+}
+
+/**
+ * Add a task from Quick Add text (dates, #project, @label, p1 are recognized), creating projects
+ * and labels that don't exist yet. Used for text that arrives from outside the add sheet.
+ */
+export function addFromText(text: string, extra: Partial<NewTask> = {}): string | undefined {
+  const s = replica.store;
+  const live = <T extends { deletedAt: string | null }>(xs: T[]) => xs.filter((x) => !x.deletedAt);
+  const parsed = parseQuickAdd(text, {
+    now: new Date(),
+    timeZone: replica.timeZone,
+    projects: live(s.all('project')).map((p) => ({ id: p.id, name: p.name })),
+    sections: live(s.all('section')).map((x) => ({ id: x.id, name: x.name, projectId: x.projectId })),
+    labels: live(s.all('label')).map((l) => ({ id: l.id, name: l.name })),
+  });
+  if (!parsed.title) return undefined;
+  const projectId = parsed.project
+    ? (parsed.project.id ?? run(createProject({ name: parsed.project.name })) ?? null)
+    : undefined;
+  const labelIds = parsed.labels
+    .map((l) => l.id ?? run(createLabel({ name: l.name })))
+    .filter((x): x is string => !!x);
+  return run(createTask({ ...toNewTask(parsed, { projectId, labelIds }), ...extra }));
+}
+
+/** Complete tasks checked off somewhere else (the widget); one undo step for all of them. */
+export function completeFromElsewhere(ids: string[]): void {
+  const open = ids.filter((id) => {
+    const task = replica.store.get('task', id);
+    return task && !task.completedAt && !task.deletedAt;
+  });
+  if (!open.length) return;
+  const title = replica.store.get('task', open[0] as string)?.title ?? '';
+  try {
+    replica.dispatch(completeTasks(open), { actor: 'user' });
+  } catch (e) {
+    if (e instanceof CommandError) return;
+    throw e;
+  }
+  toast(
+    open.length === 1 ? t('toast.completed', { title }) : t('toast.completedN', { n: open.length }),
+    undoAction(),
+  );
 }
 
 export function editTask(id: string, patch: TaskPatch): void {

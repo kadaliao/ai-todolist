@@ -14,6 +14,9 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Docket uses the microphone when you dictate tasks.",
         "NSSpeechRecognitionUsageDescription": "Docket turns your dictation into tasks."
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.app.docket.mobile"]
       }
     },
     "android": {
@@ -33,11 +36,22 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 120,
           "backgroundColor": "#FBFBFC",
-          "dark": { "backgroundColor": "#17191E" }
+          "dark": {
+            "backgroundColor": "#17191E"
+          }
         }
       ],
-      ["expo-notifications", { "enableRemoteNotifications": false, "color": "#1F8F6A" }]
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false,
+          "color": "#1F8F6A"
+        }
+      ],
+      "@bacons/apple-targets"
     ],
-    "experiments": { "typedRoutes": true }
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }

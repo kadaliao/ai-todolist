@@ -19,9 +19,13 @@ import { startNotifications } from '../state/notifications';
 import { loadReplica, ReplicaContext } from '../state/replica';
 import { getSetting } from '../state/storage';
 import { initSync, useSync } from '../state/sync';
+import { startWidgetBridge } from '../state/widget';
 import { useColors } from '../theme';
 
 void SplashScreen.preventAutoHideAsync();
+
+// Deep links into a sheet (docket://task/<id>, docket://add from the widget) keep the tabs underneath.
+export const unstable_settings = { anchor: '(tabs)' };
 
 /** The device's preferred language (Hermes' Intl always reports en-US, so ask the OS). */
 function systemLanguage(): string {
@@ -60,9 +64,11 @@ export default function RootLayout() {
   useEffect(() => {
     const stopSync = initSync(replica);
     const stopNotify = startNotifications(replica);
+    const stopWidget = startWidgetBridge(replica);
     return () => {
       stopSync();
       stopNotify();
+      stopWidget();
     };
   }, [replica]);
 

@@ -2,3 +2,4 @@
 /android
 .expo/
 expo-env.d.ts
+/targets/*/Assets.xcassets

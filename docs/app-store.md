@@ -28,6 +28,8 @@ Docket 是一个清爽、快速的待办清单。
 - 顺手的操作：向右滑完成，向左滑改日期或删除；完成有动画和触感反馈，误操作随时撤销。
 - 重复任务做对了：可以按计划重复，也可以从完成时算起；改期时会问你“只改这一次”还是“改规则”。
 - 子任务、备注、提醒：提醒由系统发送，应用关着也会准时响。
+- 小组件：主屏幕和锁屏上看今天的任务，点圆圈直接完成，不用打开应用。
+- 分享到 Docket：在 Safari、微信、备忘录里选“Docket”，文字或链接直接进收件箱。
 - AI 整理（可选）：把一段话或口述交给 AI，它会拆成几条任务草稿，日期由本机解析，不会乱编；确认后才添加，也能一键撤销。
 - 你的数据归你：所有数据先存在手机上，离线也能用；想多设备同步，就连接你自己部署的 Docket 服务器。
 
@@ -48,6 +50,8 @@ Docket is a calm, fast to-do list.
 - Gestures that feel right: swipe right to complete, left to reschedule or delete, with haptics and undo for everything.
 - Repeating tasks done right: repeat on a schedule or from when you finish, and choose between “only this one” and “change the rule” when you move one.
 - Subtasks, notes and reminders: reminders are delivered by the system, so they arrive even when the app is closed.
+- Widgets: see today's tasks on your Home Screen and Lock Screen, and check them off right there.
+- Share to Docket: send text or a link from Safari, Mail or Notes straight to your Inbox.
 - Optional AI: hand Docket a paragraph or a dictation and it drafts tasks for you. Dates are worked out on your device, so the AI can't make them up, and nothing is added until you confirm.
 - Your data stays yours: everything lives on your device first and works offline. To sync between devices, connect your own Docket server.
 
@@ -77,3 +81,10 @@ npx eas-cli build --platform android --profile production
 ```
 
 首次提交前需要：Apple Developer 账号和 App Store Connect 应用记录、Google Play 开发者账号、隐私政策网址、支持网址。
+
+iOS 还需要：
+
+- 在 `app.json` 的 `expo.ios.appleTeamId` 填团队 ID（小组件和分享扩展的签名要用）。
+- 三个 Bundle ID：`app.docket.mobile`、`app.docket.mobile.widget`、`app.docket.mobile.share`，都开启 App Groups 并勾选 `group.app.docket.mobile`。用 EAS 构建时，它会按 `@bacons/apple-targets` 写入的扩展信息自动创建这些标识和描述文件。
+
+截图里的小组件图（`*-widgets.png`）来自模拟器主屏幕：先在模拟器里放上小组件并截图到 `assets/store/raw/<语言>-widgets.png`，再运行截图脚本加标题和外框。

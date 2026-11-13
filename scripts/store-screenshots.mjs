@@ -1,5 +1,7 @@
 // App Store screenshots (6.9", 1320×2868) from the phone UI running in the Expo web preview with
 // demo data. Usage: (cd apps/mobile && pnpm web) then node scripts/store-screenshots.mjs [outDir]
+// Shots without a path (the Home Screen widgets) are framed from simulator captures already in
+// <outDir>/raw. `--only=widgets` frames just those and needs no web preview.
 import { mkdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -8,7 +10,9 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(join(root, 'apps/web/package.json'));
 const { chromium } = require('@playwright/test');
-const out = process.argv[2] ?? join(root, 'assets/store');
+const args = process.argv.slice(2);
+const only = args.find((a) => a.startsWith('--only='))?.slice('--only='.length);
+const out = args.find((a) => !a.startsWith('--')) ?? join(root, 'assets/store');
 const base = 'http://localhost:8082';
 mkdirSync(join(out, 'raw'), { recursive: true });
 
@@ -19,6 +23,7 @@ const shots = {
     ['upcoming', '/upcoming', '未来两周，按天排好', 'light'],
     ['detail', '/upcoming', '子任务、备注、提醒，都在一处', 'light'],
     ['dark', '/', '深色模式，同样耐看', 'dark'],
+    ['widgets', null, '不打开应用，也能勾掉任务', 'light'],
   ],
   en: [
     ['today', '/', 'Today, at a glance', 'light'],
@@ -26,48 +31,54 @@ const shots = {
     ['upcoming', '/upcoming', 'Two weeks, day by day', 'light'],
     ['detail', '/upcoming', 'Subtasks, notes and reminders in one place', 'light'],
     ['dark', '/', 'Just as calm in the dark', 'dark'],
+    ['widgets', null, 'Check things off from your Home Screen', 'light'],
   ],
 };
 
 const browser = await chromium.launch();
+
+async function capture(lang, name, path, scheme, raw) {
+  const ctx = await browser.newContext({
+    viewport: { width: 440, height: 956 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+    locale: lang === 'zh' ? 'zh-CN' : 'en-US',
+    timezoneId: 'Asia/Shanghai',
+    colorScheme: scheme,
+  });
+  const page = await ctx.newPage();
+  await page.goto(`${base}/?demo=1`, { timeout: 120000 });
+  await page.waitForTimeout(3500);
+  if (path && path !== '/') {
+    await page.evaluate((p) => window.history.pushState(null, '', p), path);
+    await page.goto(`${base}${path}`);
+    await page.waitForTimeout(2500);
+  }
+  if (name === 'add') {
+    await page.keyboard.type(
+      lang === 'zh' ? '下周五下午3点 和设计团队评审 #工作 p1' : 'Review with design next fri 3pm #Work p1',
+      { delay: 5 },
+    );
+    await page.waitForTimeout(600);
+  }
+  if (name === 'detail') {
+    await page
+      .getByText(lang === 'zh' ? '准备发布会演讲稿' : 'Draft the launch keynote')
+      .first()
+      .click();
+    await page.waitForTimeout(1500);
+  }
+  // Hide the web focus ring of text fields (not present on device).
+  await page.addStyleTag({ content: 'input, textarea { outline: none !important; }' });
+  await page.screenshot({ path: raw });
+  await ctx.close();
+}
 for (const [lang, list] of Object.entries(shots)) {
   for (const [name, path, caption, scheme] of list) {
-    const ctx = await browser.newContext({
-      viewport: { width: 440, height: 956 },
-      deviceScaleFactor: 3,
-      isMobile: true,
-      hasTouch: true,
-      locale: lang === 'zh' ? 'zh-CN' : 'en-US',
-      timezoneId: 'Asia/Shanghai',
-      colorScheme: scheme,
-    });
-    const page = await ctx.newPage();
-    await page.goto(`${base}/?demo=1`, { timeout: 120000 });
-    await page.waitForTimeout(3500);
-    if (path && path !== '/') {
-      await page.evaluate((p) => window.history.pushState(null, '', p), path);
-      await page.goto(`${base}${path}`);
-      await page.waitForTimeout(2500);
-    }
-    if (name === 'add') {
-      await page.keyboard.type(
-        lang === 'zh' ? '下周五下午3点 和设计团队评审 #工作 p1' : 'Review with design next fri 3pm #Work p1',
-        { delay: 5 },
-      );
-      await page.waitForTimeout(600);
-    }
-    if (name === 'detail') {
-      await page
-        .getByText(lang === 'zh' ? '准备发布会演讲稿' : 'Draft the launch keynote')
-        .first()
-        .click();
-      await page.waitForTimeout(1500);
-    }
-    // Hide the web focus ring of text fields (not present on device).
-    await page.addStyleTag({ content: 'input, textarea { outline: none !important; }' });
+    if (only && name !== only) continue;
     const raw = join(out, 'raw', `${lang}-${name}.png`);
-    await page.screenshot({ path: raw });
-    await ctx.close();
+    if (path !== null) await capture(lang, name, path, scheme, raw);
 
     // Marketing frame: caption on paper, the screen inside a rounded device outline.
     const frame = await browser.newPage({ viewport: { width: 1320, height: 2868 } });

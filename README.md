@@ -8,7 +8,7 @@
 - **手感**：完成动画与撤销提示、⌘Z 撤销一切、拖拽排序和拖到项目或日期、多选、键盘操作、⌘K 命令面板、深浅色、中英文。
 - **AI**（可选，任意 OpenAI 兼容模型）：一段话或口述整理成多条任务（先预览再添加）、一键拆成子任务；AI 的改动都能单独撤销。
 - **MCP**：让 Claude 等 agent 直接读写你的待办（查找、添加、完成、改期、概览），不能删除你亲手建的任务。
-- **全平台**：网页（PWA，可离线）、桌面（macOS 已验证；Windows / Linux 可用 Tauri 构建）：全局快捷键快速录入、菜单栏常驻、系统提醒；iPhone / Android：滑动手势、触感反馈、系统通知。
+- **全平台**：网页（PWA，可离线）、桌面（macOS 已验证；Windows / Linux 可用 Tauri 构建）：全局快捷键快速录入、菜单栏常驻、系统提醒；iPhone / Android：滑动手势、触感反馈、系统通知；iPhone 另有主屏幕与锁屏小组件（在小组件上直接勾掉任务）和分享扩展（从任意应用把文字或链接存进收件箱）。
 - **本地优先**：所有操作即时生效、离线可用；多设备通过自托管的同步服务合并，字段级合并，冲突自动收敛。
 
 文档：[调研](docs/research.md) · [架构与语义](docs/architecture.md) · [部署](docs/deploy.md)
@@ -36,7 +36,7 @@ docker compose exec docket node dist/cli.js token create laptop   # 每台设备
 
 浏览器打开服务器地址即可使用网页版；在 设置 → 同步 填入地址和令牌。HTTPS 反代与升级见 [docs/deploy.md](docs/deploy.md)。
 
-**桌面版**：`pnpm --filter @ai-todo/desktop build` 生成 `Docket.app` 和 DMG。⌘⇧Space（Windows 为 Ctrl+Shift+Space）随时唤出快速录入；关闭窗口后常驻菜单栏，提醒照常。
+**桌面版**：`pnpm --filter @ai-todo/desktop build` 生成 `Docket.app` 和 DMG。设置 `APPLE_SIGNING_IDENTITY`（Developer ID）会签名，再设置 `DOCKET_NOTARY_PROFILE`（`xcrun notarytool store-credentials` 存好的钥匙串配置名）会公证并装订，别人下载后可直接打开。⌘⇧Space（Windows 为 Ctrl+Shift+Space）随时唤出快速录入；关闭窗口后常驻菜单栏，提醒照常。
 
 **手机版**：`cd apps/mobile && npx expo run:ios`（或 `run:android`）在模拟器 / 真机运行；发布用 EAS（`npx eas-cli build`）。
 
