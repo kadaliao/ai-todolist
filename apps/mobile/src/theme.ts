@@ -1,4 +1,4 @@
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 
 /** Same tokens as the web app: ink on cool paper, jade for done/primary, vermilion/amber/lapis priorities. */
 
@@ -61,7 +61,15 @@ export function useColors(): Colors {
 export const PRIORITY_COLOR = (c: Colors, p: number) =>
   p === 3 ? c.p1 : p === 2 ? c.p2 : p === 1 ? c.p3 : c.ink3;
 
+/** Bricolage Grotesque is embedded in native builds (expo-font plugin): iOS looks fonts up by
+ * PostScript name, Android by file name. The web preview loads it at runtime under the file name. */
 export const fonts = {
-  display: 'BricolageGrotesque_700Bold',
-  displaySemi: 'BricolageGrotesque_600SemiBold',
+  display: Platform.select({ ios: 'BricolageGrotesque-Bold', default: 'BricolageGrotesque_700Bold' }),
+  displaySemi: Platform.select({
+    ios: 'BricolageGrotesque-SemiBold',
+    default: 'BricolageGrotesque_600SemiBold',
+  }),
 };
+
+/** Content column for wide screens (iPad, tablets): lists stay readable instead of spanning 13". */
+export const readable = { width: '100%', maxWidth: 760, alignSelf: 'center' } as const;

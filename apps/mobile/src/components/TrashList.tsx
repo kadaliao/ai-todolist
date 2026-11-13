@@ -4,7 +4,7 @@ import { RotateCcw } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { run } from '../state/actions';
 import { useQuery } from '../state/replica';
-import { useColors } from '../theme';
+import { readable, useColors } from '../theme';
 import { Empty, Txt } from './ui';
 
 export function TrashList() {
@@ -12,7 +12,10 @@ export function TrashList() {
   const tasks = useQuery((s) => trash(s));
   const roots = tasks.filter((x) => !x.parentId || !tasks.some((p) => p.id === x.parentId));
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ paddingBottom: 80 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      contentContainerStyle={[readable, { paddingBottom: 80 }]}
+    >
       {!roots.length && <Empty title={t('trash.empty.title')} body={t('trash.empty.body')} />}
       {roots.map((task) => (
         <View key={task.id} style={styles.row}>

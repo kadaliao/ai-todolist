@@ -64,6 +64,18 @@ function AndroidShareIntake() {
   return null;
 }
 
+/**
+ * Native builds embed the display font, so there is nothing to wait for. The web preview loads it
+ * at runtime; a failed load falls back to the system font instead of holding the splash screen.
+ */
+const useAppFonts: () => boolean =
+  Platform.OS === 'web'
+    ? () => {
+        const [loaded, error] = useFonts({ BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold });
+        return loaded || !!error;
+      }
+    : () => true;
+
 function boot(): Replica {
   const r = loadReplica();
   bindActions(r);
@@ -73,7 +85,7 @@ function boot(): Replica {
 export default function RootLayout() {
   const c = useColors();
   const scheme = useColorScheme();
-  const [fontsLoaded] = useFonts({ BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold });
+  const fontsLoaded = useAppFonts();
   const [replica, setReplica] = useState<Replica>(boot);
   const reloadNonce = useSync((s) => s.reloadNonce);
 

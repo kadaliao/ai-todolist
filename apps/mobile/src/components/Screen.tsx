@@ -1,9 +1,10 @@
+import { t } from '@ai-todo/shared';
 import { router } from 'expo-router';
 import { Search, Settings } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useColors } from '../theme';
+import { readable, useColors } from '../theme';
 import { Press, Txt } from './ui';
 
 /** A tab screen: large title (optionally with the day numeral), search + settings, scrolling body. */
@@ -25,17 +26,17 @@ export function Screen({
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: c.bg }}
-      contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: 160 }}
+      contentContainerStyle={[readable, { paddingTop: insets.top + 4, paddingBottom: 160 }]}
       keyboardDismissMode="on-drag"
     >
       <View style={styles.toolbar}>
         {right}
-        <Press onPress={() => router.push('/search')} accessibilityLabel="Search">
+        <Press onPress={() => router.push('/search')} accessibilityLabel={t('nav.search')}>
           <View style={styles.iconBtn}>
             <Search size={22} color={c.ink2} />
           </View>
         </Press>
-        <Press onPress={() => router.push('/settings')} accessibilityLabel="Settings">
+        <Press onPress={() => router.push('/settings')} accessibilityLabel={t('nav.settings')}>
           <View style={styles.iconBtn}>
             <Settings size={22} color={c.ink2} />
           </View>

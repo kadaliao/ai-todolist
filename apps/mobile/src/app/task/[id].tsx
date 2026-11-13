@@ -20,7 +20,7 @@ import { Chip, Txt } from '../../components/ui';
 import { editTask, removeTasks, run, toggleComplete } from '../../state/actions';
 import { breakdownTask } from '../../state/ai';
 import { useQuery, useReplica, useToday } from '../../state/replica';
-import { PRIORITY_COLOR, useColors } from '../../theme';
+import { PRIORITY_COLOR, readable, useColors } from '../../theme';
 
 export default function TaskSheet() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -80,7 +80,7 @@ function Detail({ task, today }: { task: Task; today: string }) {
   return (
     <ScrollView
       style={{ backgroundColor: c.surface }}
-      contentContainerStyle={{ paddingTop: 26, paddingBottom: insets.bottom + 40 }}
+      contentContainerStyle={[readable, { paddingTop: 26, paddingBottom: insets.bottom + 40 }]}
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.titleRow}>

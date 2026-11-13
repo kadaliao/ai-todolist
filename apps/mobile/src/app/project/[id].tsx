@@ -7,7 +7,7 @@ import { TaskTree } from '../../components/TaskTree';
 import { Empty, SectionHeader, Txt } from '../../components/ui';
 import { run } from '../../state/actions';
 import { useQuery, useToday } from '../../state/replica';
-import { useColors } from '../../theme';
+import { readable, useColors } from '../../theme';
 
 export default function ProjectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -72,7 +72,10 @@ export default function ProjectScreen() {
           ),
         }}
       />
-      <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ paddingBottom: 160 }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: c.bg }}
+        contentContainerStyle={[readable, { paddingBottom: 160 }]}
+      >
         <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View

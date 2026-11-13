@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TaskRow } from '../components/TaskRow';
 import { Txt } from '../components/ui';
 import { useQuery, useToday } from '../state/replica';
-import { useColors } from '../theme';
+import { readable, useColors } from '../theme';
 
 export default function SearchScreen() {
   const c = useColors();
@@ -38,7 +38,7 @@ export default function SearchScreen() {
           </Txt>
         </Pressable>
       </View>
-      <ScrollView keyboardDismissMode="on-drag" contentContainerStyle={{ paddingBottom: 60 }}>
+      <ScrollView keyboardDismissMode="on-drag" contentContainerStyle={[readable, { paddingBottom: 60 }]}>
         {results.map((task) => (
           <TaskRow key={task.id} task={task} today={today} showProject />
         ))}

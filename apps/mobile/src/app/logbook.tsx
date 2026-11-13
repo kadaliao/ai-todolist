@@ -8,7 +8,7 @@ import { Checkbox } from '../components/Checkbox';
 import { Empty, SectionHeader, Txt } from '../components/ui';
 import { toggleComplete } from '../state/actions';
 import { useQuery, useToday } from '../state/replica';
-import { useColors } from '../theme';
+import { readable, useColors } from '../theme';
 
 const localDay = (iso: string) => {
   const d = new Date(iso);
@@ -28,7 +28,10 @@ export default function LogbookScreen() {
   return (
     <>
       <Stack.Screen options={{ title: t('nav.logbook') }} />
-      <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ paddingBottom: 80 }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: c.bg }}
+        contentContainerStyle={[readable, { paddingBottom: 80 }]}
+      >
         {!groups.length && <Empty title={t('logbook.empty.title')} body={t('logbook.empty.body')} />}
         {groups.map(([day, list]) => (
           <View key={day} style={{ marginBottom: 12 }}>

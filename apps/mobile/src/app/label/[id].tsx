@@ -5,7 +5,7 @@ import { ScrollView, View } from 'react-native';
 import { TaskRow } from '../../components/TaskRow';
 import { Empty, Txt } from '../../components/ui';
 import { useQuery, useToday } from '../../state/replica';
-import { useColors } from '../../theme';
+import { readable, useColors } from '../../theme';
 
 export default function LabelScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -16,7 +16,10 @@ export default function LabelScreen() {
   return (
     <>
       <Stack.Screen options={{ title: '' }} />
-      <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ paddingBottom: 160 }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: c.bg }}
+        contentContainerStyle={[readable, { paddingBottom: 160 }]}
+      >
         <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>
           <Txt variant="large">@{label?.name}</Txt>
         </View>
