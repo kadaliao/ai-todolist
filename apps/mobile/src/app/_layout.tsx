@@ -7,6 +7,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/bricolage-grotesque';
 import { router, Stack } from 'expo-router';
+import { useShareIntent } from 'expo-share-intent';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
@@ -42,6 +43,26 @@ function systemLanguage(): string {
 const locale =
   getSetting<'zh' | 'en'>('locale') ?? (systemLanguage().toLowerCase().startsWith('zh') ? 'zh' : 'en');
 setLocale(locale);
+
+/**
+ * Android share sheet → Quick Add prefilled with what was shared (iOS has its own extension in
+ * targets/share). A bare link becomes a note, titled with the page title when the sender gives one.
+ */
+function AndroidShareIntake() {
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent({
+    disabled: Platform.OS !== 'android',
+  });
+  useEffect(() => {
+    if (!hasShareIntent) return;
+    const url = shareIntent.webUrl ?? undefined;
+    const raw = (shareIntent.text ?? '').trim();
+    const rest = url ? raw.replace(url, '').trim() : raw;
+    const text = rest || shareIntent.meta?.title?.trim() || '';
+    router.push({ pathname: '/add', params: { text, ...(url ? { notes: url } : {}) } });
+    resetShareIntent();
+  }, [hasShareIntent, shareIntent, resetShareIntent]);
+  return null;
+}
 
 function boot(): Replica {
   const r = loadReplica();
@@ -138,6 +159,7 @@ export default function RootLayout() {
           <Stack.Screen name="search" options={{ headerShown: false, animation: 'fade' }} />
         </Stack>
         <Toasts />
+        <AndroidShareIntake />
       </ReplicaContext.Provider>
     </GestureHandlerRootView>
   );

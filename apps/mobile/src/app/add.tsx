@@ -10,7 +10,7 @@ import {
 import { describeRecurrence, formatScheduled, t } from '@ai-todo/shared';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams } from 'expo-router';
-import { Calendar, Flag, Hash, Inbox, Repeat, Tag } from 'lucide-react-native';
+import { Calendar, Flag, Hash, Inbox, Link2, Repeat, Tag } from 'lucide-react-native';
 import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,9 +23,11 @@ import { PRIORITY_COLOR, useColors } from '../theme';
 export default function AddSheet() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ date?: string; projectId?: string }>();
+  // `text` / `notes` prefill the sheet when something is shared to Docket (Android share sheet).
+  const params = useLocalSearchParams<{ date?: string; projectId?: string; text?: string; notes?: string }>();
   const today = useToday();
-  const [text, setText] = useState('');
+  const [text, setText] = useState(params.text ?? '');
+  const [notes, setNotes] = useState(params.notes);
   const [ignore, setIgnore] = useState<string[]>([]);
   const [date, setDate] = useState<string | null | undefined>(params.date);
   const [priority, setPriority] = useState<Priority | undefined>();
@@ -81,8 +83,10 @@ export default function AddSheet() {
         ...(labels.length ? { labels } : {}),
         ...(scheduled ? { scheduled } : {}),
         ...(parsed.recurrence && scheduled ? { recurrence: parsed.recurrence } : {}),
+        ...(notes ? { notes } : {}),
       },
     ]);
+    setNotes(undefined);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setAdded((n) => n + 1);
     setText('');
@@ -115,6 +119,14 @@ export default function AddSheet() {
           style={[styles.input, { color: c.ink }]}
         />
       </View>
+      {notes ? (
+        <View style={styles.link}>
+          <Link2 size={14} color={c.jade} />
+          <Txt variant="meta" tone={c.ink2} numberOfLines={1} style={{ flex: 1 }}>
+            {notes.replace(/^https?:\/\//, '')}
+          </Txt>
+        </View>
+      ) : null}
       {parsed.tokens.length > 0 && (
         <View style={styles.tokens}>
           {parsed.tokens.map((tok) => (
@@ -243,6 +255,7 @@ const styles = StyleSheet.create({
   inputRow: { paddingHorizontal: 20, paddingTop: 22 },
   input: { fontSize: 19, lineHeight: 25, minHeight: 44, paddingVertical: 8 },
   tokens: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 20, paddingBottom: 4 },
+  link: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingBottom: 6 },
   token: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4 },
   // Plain wrapping rows: horizontal ScrollViews don't measure inside fit-to-content sheets.
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingVertical: 8 },

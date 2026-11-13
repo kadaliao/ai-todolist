@@ -43,7 +43,7 @@ export default function TodayScreen() {
         <TaskRow key={task.id} task={task} today={today} showProject showDate={false} />
       ))}
       {!data.today.length && !data.overdue.length && (
-        <Empty title={t('today.empty.title')} body={t('today.empty.body')} />
+        <Empty title={t('today.empty.title')} body={t('today.empty.bodyTouch')} />
       )}
     </Screen>
   );

@@ -97,7 +97,7 @@ export default function ProjectScreen() {
             <TaskTree tasks={g.tasks} today={today} />
           </View>
         ))}
-        {!total && <Empty title={t('project.empty.title')} body={t('project.empty.body')} />}
+        {!total && <Empty title={t('project.empty.title')} body={t('project.empty.bodyTouch')} />}
       </ScrollView>
     </>
   );

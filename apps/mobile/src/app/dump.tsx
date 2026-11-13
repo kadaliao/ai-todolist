@@ -98,7 +98,7 @@ export default function DumpScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ flex: 1, backgroundColor: c.bg }}
     >
-      <View style={[styles.head, { paddingTop: 18 }]}>
+      <View style={[styles.head, { paddingTop: 18 + (Platform.OS === 'android' ? insets.top : 0) }]}>
         <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel={t('cancel')}>
           <X size={24} color={c.ink2} />
         </Pressable>

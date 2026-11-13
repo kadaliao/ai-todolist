@@ -17,9 +17,10 @@ export function Toasts() {
           entering={FadeInDown.springify().damping(18)}
           exiting={FadeOutDown.duration(160)}
           layout={LinearTransition}
+          style={{ maxWidth: '100%' }}
         >
           <View style={[styles.toast, { backgroundColor: c.ink }]}>
-            <Txt numberOfLines={2} style={{ flex: 1, color: c.bg, fontSize: 14.5 }}>
+            <Txt numberOfLines={2} style={{ flexShrink: 1, color: c.bg, fontSize: 14.5 }}>
               {t.message}
             </Txt>
             {t.action ? (

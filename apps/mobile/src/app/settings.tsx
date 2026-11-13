@@ -4,6 +4,7 @@ import { type ReactNode, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -40,7 +41,10 @@ export default function SettingsScreen() {
   return (
     <ScrollView
       style={{ backgroundColor: c.bg }}
-      contentContainerStyle={{ paddingTop: 20, paddingBottom: insets.bottom + 40 }}
+      contentContainerStyle={{
+        paddingTop: 20 + (Platform.OS === 'android' ? insets.top : 0),
+        paddingBottom: insets.bottom + 40,
+      }}
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.head}>

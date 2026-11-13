@@ -17,15 +17,20 @@
       },
       "entitlements": {
         "com.apple.security.application-groups": ["group.app.docket.mobile"]
+      },
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png",
+        "tinted": "./assets/icon-tinted.png"
       }
     },
     "android": {
       "package": "app.docket.mobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1F8F6A"
-      },
-      "edgeToEdgeEnabled": true
+        "backgroundColor": "#1F8F6A",
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png"
+      }
     },
     "plugins": [
       "expo-router",
@@ -48,7 +53,14 @@
           "color": "#1F8F6A"
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      [
+        "expo-share-intent",
+        {
+          "disableIOS": true,
+          "androidIntentFilters": ["text/*"]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
