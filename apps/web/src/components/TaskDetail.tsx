@@ -1,4 +1,5 @@
 import { createTask, createTasks, type Reminder, sortByOrder, type Task, updateTask } from '@ai-todo/core';
+import { describeRecurrence, formatScheduled, getLocale, t, weekdayName } from '@ai-todo/shared';
 import {
   Bell,
   Calendar,
@@ -15,8 +16,6 @@ import {
   X,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { describeRecurrence, formatScheduled, weekdayName } from '../lib/dates';
-import { getLocale, t } from '../lib/i18n';
 import { Markdown } from '../lib/markdown';
 import { duplicate, editTask, move, removeTasks, run, schedule, toggleComplete } from '../state/actions';
 import { AiError, breakdownTask } from '../state/ai';

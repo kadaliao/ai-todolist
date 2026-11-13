@@ -1,4 +1,5 @@
 import { addDays, isoWeekday, type Priority } from '@ai-todo/core';
+import { t } from '@ai-todo/shared';
 import {
   ArrowRightLeft,
   CalendarDays,
@@ -15,7 +16,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { t } from '../lib/i18n';
 import { completeMany, duplicate, move, removeTasks, restore, schedule, setPriority } from '../state/actions';
 import { useReplica } from '../state/replica';
 import { useUI } from '../state/ui';

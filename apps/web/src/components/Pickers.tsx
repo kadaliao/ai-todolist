@@ -1,7 +1,7 @@
 import { type Priority, sidebar, sortByOrder } from '@ai-todo/core';
+import { t } from '@ai-todo/shared';
 import { Check, Flag, Hash, Inbox, Plus, Tag } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { t } from '../lib/i18n';
 import { addLabel, addProject } from '../state/actions';
 import { useQuery } from '../state/replica';
 import { cx } from './ui';

@@ -16,7 +16,7 @@ type Modules = {
   sync: typeof import('./state/sync');
   reminders: typeof import('./state/reminders');
   platform: typeof import('./platform');
-  i18n: typeof import('./lib/i18n');
+  i18n: typeof import('@ai-todo/shared');
   InstanceBlocked: typeof import('./components/Overlays').InstanceBlocked;
 };
 
@@ -71,7 +71,7 @@ function Root() {
 
 async function boot() {
   if (!(globalThis as { Temporal?: unknown }).Temporal) await import('temporal-polyfill/global');
-  const i18n = await import('./lib/i18n');
+  const i18n = await import('@ai-todo/shared');
   const saved = localStorage.getItem('docket.locale');
   i18n.setLocale(saved === 'zh' || saved === 'en' ? saved : i18n.detectLocale());
 

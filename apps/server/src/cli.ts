@@ -6,13 +6,22 @@ import { Db } from './db';
  *   docket-server token create <name>   print a new token (shown once)
  *   docket-server token list
  *   docket-server token revoke <name>
+ *   docket-server backup [file]          consistent copy of the database
  */
 
 const [cmd, sub, name] = process.argv.slice(2);
+if (cmd === 'backup') {
+  const target = sub ?? `docket-backup-${new Date().toISOString().slice(0, 10)}.db`;
+  const backupDb = new Db(loadConfig().dbPath);
+  backupDb.backup(target);
+  backupDb.close();
+  console.log(`Backed up to ${target}`);
+  process.exit(0);
+}
 const db = new Db(loadConfig().dbPath);
 
 function usage(): never {
-  console.log('usage: cli token create <name> | token list | token revoke <name>');
+  console.log('usage: cli token create <name> | token list | token revoke <name> | backup [file]');
   process.exit(1);
 }
 

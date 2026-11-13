@@ -1,4 +1,5 @@
 import { addDays, type Replica, siblingsOf, sortByOrder } from '@ai-todo/core';
+import { type Locale, t } from '@ai-todo/shared';
 import { PointerActivationConstraints } from '@dnd-kit/dom';
 import { isSortable } from '@dnd-kit/dom/sortable';
 import { DragDropProvider, KeyboardSensor, PointerSensor } from '@dnd-kit/react';
@@ -23,7 +24,6 @@ import {
   TrashView,
   UpcomingView,
 } from './components/Views';
-import { type Locale, t } from './lib/i18n';
 import { completeMany, move, redo, removeTasks, schedule, setPriority, undo } from './state/actions';
 import { useReplica, useToday } from './state/replica';
 import { useUI } from './state/ui';

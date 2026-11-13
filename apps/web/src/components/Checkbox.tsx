@@ -1,5 +1,5 @@
 import type { Priority } from '@ai-todo/core';
-import { t } from '../lib/i18n';
+import { t } from '@ai-todo/shared';
 
 export function Checkbox({
   priority,

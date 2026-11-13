@@ -7,6 +7,15 @@ import {
   type Scheduled,
 } from '@ai-todo/core';
 import {
+  describeRecurrence,
+  formatScheduled,
+  getLocale,
+  monthGrid,
+  monthTitle,
+  t,
+  weekdayName,
+} from '@ai-todo/shared';
+import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -18,8 +27,6 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { describeRecurrence, formatScheduled, monthGrid, monthTitle, weekdayName } from '../lib/dates';
-import { getLocale, t } from '../lib/i18n';
 import { timeZone } from '../state/replica';
 import { cx } from './ui';
 

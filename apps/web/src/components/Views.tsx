@@ -16,11 +16,10 @@ import {
   updateProject,
   updateSection,
 } from '@ai-todo/core';
+import { daysBetween, formatDay, getLocale, t, weekdayName } from '@ai-todo/shared';
 import { useDroppable } from '@dnd-kit/react';
 import { Archive, Hash, MoreHorizontal, Pencil, Plus, Repeat, RotateCcw, Tag, Trash2 } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
-import { daysBetween, formatDay, weekdayName } from '../lib/dates';
-import { getLocale, t } from '../lib/i18n';
 import { removeProject, rescheduleAllOverdue, run, toggleComplete } from '../state/actions';
 import { useQuery, useReplica, useToday } from '../state/replica';
 import { useUI } from '../state/ui';

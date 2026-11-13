@@ -1,4 +1,5 @@
 import { inbox, sidebar, today as todayView } from '@ai-todo/core';
+import { t } from '@ai-todo/shared';
 import { useDroppable } from '@dnd-kit/react';
 import {
   CalendarDays,
@@ -15,7 +16,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { t } from '../lib/i18n';
 import { addLabel, addProject } from '../state/actions';
 import { useQuery, useToday } from '../state/replica';
 import { useSyncStatus } from '../state/sync';

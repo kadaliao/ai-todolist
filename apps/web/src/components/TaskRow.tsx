@@ -1,8 +1,7 @@
 import type { Task } from '@ai-todo/core';
+import { dateTone, formatScheduled, formatTime, t } from '@ai-todo/shared';
 import { ChevronRight, FileText, MoreHorizontal, Repeat, Sparkles } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
-import { dateTone, formatScheduled, formatTime } from '../lib/dates';
-import { t } from '../lib/i18n';
 import { editTask, toggleComplete } from '../state/actions';
 import { useQuery } from '../state/replica';
 import { useUI } from '../state/ui';

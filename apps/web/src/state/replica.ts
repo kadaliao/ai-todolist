@@ -8,9 +8,9 @@ import {
   type Store,
   todayIn,
 } from '@ai-todo/core';
+import { t } from '@ai-todo/shared';
 import { createStore, del, get, set } from 'idb-keyval';
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { t } from '../lib/i18n';
 
 /**
  * The device's replica: loaded from IndexedDB, saved back (debounced, and immediately when the

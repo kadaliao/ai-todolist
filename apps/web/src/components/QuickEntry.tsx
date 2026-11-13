@@ -1,7 +1,6 @@
 import { parseQuickAdd } from '@ai-todo/core';
+import { describeRecurrence, formatScheduled, t } from '@ai-todo/shared';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { describeRecurrence, formatScheduled } from '../lib/dates';
-import { t } from '../lib/i18n';
 import { Logo } from './Sidebar';
 
 /**

@@ -7,7 +7,18 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!**/dist", "!**/*.tmp.mjs", "!**/src-tauri/target", "!**/src-tauri/gen"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/*.tmp.mjs",
+      "!**/src-tauri/target",
+      "!**/src-tauri/gen",
+      "!**/ios",
+      "!**/android",
+      "!**/.expo",
+      "!**/test-results",
+      "!**/playwright-report"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -49,5 +60,23 @@
     "parser": {
       "tailwindDirectives": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/mobile/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noReactNativeRawText": {
+              "level": "error",
+              "options": {
+                "skip": ["Txt"]
+              }
+            },
+            "useReactNativePlatformComponents": "off"
+          }
+        }
+      }
+    }
+  ]
 }

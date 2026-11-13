@@ -1,6 +1,6 @@
 import { checkServer, normalizeServerUrl, type Replica, SyncClient, type SyncState } from '@ai-todo/core';
+import { getLocale, t } from '@ai-todo/shared';
 import { create } from 'zustand';
-import { getLocale, t } from '../lib/i18n';
 import { getSetting, isPristine, resetForSync, setSetting } from './replica';
 
 /** Web/desktop wrapper around the shared sync client: settings in IndexedDB, status in a store. */

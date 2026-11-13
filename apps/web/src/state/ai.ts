@@ -1,5 +1,5 @@
 import { type NewTask, parseQuickAdd, type Replica, sortByOrder } from '@ai-todo/core';
-import { t } from '../lib/i18n';
+import { t } from '@ai-todo/shared';
 import { timeZone } from './replica';
 import { useSyncStore } from './sync';
 

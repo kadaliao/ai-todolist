@@ -19,6 +19,7 @@ export {
   reanchor,
   startRecurrence,
 } from './recurrence';
+export { type DueReminder, dueReminders } from './reminders';
 export * from './replica';
 export {
   checkServer,

@@ -16,6 +16,7 @@ const zh = {
   'nav.newProject': '新建项目',
   'nav.newLabel': '新建标签',
   'nav.settings': '设置',
+  'nav.browse': '浏览',
 
   'today.overdue': '已过期',
   'today.rescheduleAll': '全部改到今天',
@@ -183,6 +184,7 @@ const zh = {
   'settings.sync.status.synced': '已同步',
   'settings.sync.status.offline': '离线，恢复网络后自动同步',
   'settings.sync.status.error': '同步失败：{message}',
+  'settings.sync.invalidToken': '令牌无效',
   'settings.sync.help': '在服务器上运行 docket-server 后，把地址和令牌填在这里。每台设备用自己的令牌。',
   'settings.ai': 'AI',
   'settings.ai.help': 'AI 请求经由同步服务器转发，模型和密钥在服务器上配置。',
@@ -222,6 +224,9 @@ const zh = {
   'onboarding.4': '把任务拖到左侧的项目或“今天”上',
   'onboarding.5': '检查这一周的计划',
   'onboarding.project': '工作',
+  'onboarding.mobile1': '欢迎使用 Docket，点左边的圆圈完成这个任务',
+  'onboarding.mobile2': '向右滑完成，向左滑改日期',
+  'onboarding.mobile3': '点右下角的 + 添加任务，试试“明天下午3点 写周报”',
   'onboarding.notes': '完成后可以按 ⌘Z 撤销。所有操作都可以撤销。',
 
   'weekday.short': '日,一,二,三,四,五,六',
@@ -244,6 +249,7 @@ const en: Record<MessageKey, string> = {
   'nav.newProject': 'New project',
   'nav.newLabel': 'New label',
   'nav.settings': 'Settings',
+  'nav.browse': 'Browse',
   'today.overdue': 'Overdue',
   'today.rescheduleAll': 'Move all to today',
   'today.empty.title': 'Nothing due today',
@@ -399,6 +405,7 @@ const en: Record<MessageKey, string> = {
   'settings.sync.status.synced': 'Synced',
   'settings.sync.status.offline': 'Offline — will sync when back online',
   'settings.sync.status.error': 'Sync failed: {message}',
+  'settings.sync.invalidToken': 'Invalid token',
   'settings.sync.help':
     'Run docket-server, then enter its URL and a token here. Each device uses its own token.',
   'settings.ai': 'AI',
@@ -436,6 +443,9 @@ const en: Record<MessageKey, string> = {
   'onboarding.4': 'Drag a task onto a project or “Today” in the sidebar',
   'onboarding.5': 'Review the week ahead',
   'onboarding.project': 'Personal',
+  'onboarding.mobile1': 'Welcome to Docket — tap the circle to complete this task',
+  'onboarding.mobile2': 'Swipe right to complete, left to reschedule',
+  'onboarding.mobile3': 'Tap + to add a task — try “Call mom tomorrow 3pm”',
   'onboarding.notes': 'Completed by mistake? Press ⌘Z. Everything can be undone.',
   'weekday.short': 'Sun,Mon,Tue,Wed,Thu,Fri,Sat',
   'count.tasks': '{n} tasks',
@@ -455,7 +465,7 @@ let current: Locale = detectLocale();
 
 export function setLocale(l: Locale): void {
   current = l;
-  document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en';
+  if (typeof document !== 'undefined') document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en';
 }
 
 export function getLocale(): Locale {

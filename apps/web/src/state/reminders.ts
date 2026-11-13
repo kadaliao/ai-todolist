@@ -1,7 +1,6 @@
-import { type Replica, type Task, toInstant } from '@ai-todo/core';
+import { type DueReminder, dueReminders, type Replica } from '@ai-todo/core';
+import { formatTime, getLocale } from '@ai-todo/shared';
 import { create } from 'zustand';
-import { formatTime } from '../lib/dates';
-import { getLocale } from '../lib/i18n';
 import { timeZone } from './replica';
 import { useUI } from './ui';
 
@@ -72,41 +71,9 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return ok;
 }
 
-interface Due {
-  key: string;
-  at: number;
-  task: Task;
-  minutesBefore: number;
-}
+type Due = DueReminder;
 
-/** Every reminder instant for open, dated tasks. */
-export function dueReminders(tasks: Task[], tz: string, atTimeByDefault: boolean): Due[] {
-  const out: Due[] = [];
-  for (const t of tasks) {
-    if (t.completedAt || t.deletedAt || !t.scheduled) continue;
-    const reminders = t.reminders.length
-      ? t.reminders
-      : atTimeByDefault && t.scheduled.time
-        ? [{ id: 'default', kind: 'relative' as const, minutesBefore: 0 }]
-        : [];
-    for (const r of reminders) {
-      if (r.kind === 'relative') {
-        if (!t.scheduled.time) continue;
-        const at = toInstant(t.scheduled.date, t.scheduled.time, tz).getTime() - r.minutesBefore * 60_000;
-        out.push({
-          key: `${t.id}@${t.scheduled.date}T${t.scheduled.time}-${r.minutesBefore}`,
-          at,
-          task: t,
-          minutesBefore: r.minutesBefore,
-        });
-      } else {
-        const at = toInstant(r.date, r.at, tz).getTime();
-        out.push({ key: `${t.id}@${r.date}T${r.at}`, at, task: t, minutesBefore: 0 });
-      }
-    }
-  }
-  return out.sort((a, b) => a.at - b.at);
-}
+export { dueReminders };
 
 const FIRED_KEY = 'docket.reminders.fired';
 const GRACE_MS = 15 * 60_000;

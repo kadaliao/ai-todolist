@@ -7,10 +7,9 @@ import {
   type Scheduled,
   sortByOrder,
 } from '@ai-todo/core';
+import { formatScheduled, t } from '@ai-todo/shared';
 import { Calendar, Flag, Hash, Inbox, Plus, Repeat, Sparkles, Tag, X } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { formatScheduled } from '../lib/dates';
-import { t } from '../lib/i18n';
 import { addLabel, addProject, addTasks, getReplica } from '../state/actions';
 import { timeZone, useQuery, useToday } from '../state/replica';
 import { useUI } from '../state/ui';

@@ -1,4 +1,5 @@
 import { search, sidebar } from '@ai-todo/core';
+import { formatScheduled, t } from '@ai-todo/shared';
 import { Command } from 'cmdk';
 import {
   CalendarClock,
@@ -16,8 +17,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { formatScheduled } from '../lib/dates';
-import { t } from '../lib/i18n';
 import { rescheduleAllOverdue } from '../state/actions';
 import { useQuery, useToday } from '../state/replica';
 import { type Route, useUI } from '../state/ui';

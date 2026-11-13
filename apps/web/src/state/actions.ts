@@ -23,8 +23,7 @@ import {
   uncompleteTask,
   updateTask,
 } from '@ai-todo/core';
-import { formatDay } from '../lib/dates';
-import { t } from '../lib/i18n';
+import { formatDay, t } from '@ai-todo/shared';
 import { askRescheduleMode, useUI } from './ui';
 
 /**

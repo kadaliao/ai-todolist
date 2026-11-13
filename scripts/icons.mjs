@@ -20,6 +20,9 @@ const targets = [
   ['assets/icon-maskable-1024.png', 1024, true],
   ['assets/icon-ios-1024.png', 1024, 'ios'],
   ['assets/icon-macos-1024.png', 1024, 'macos'],
+  ['apps/mobile/assets/icon.png', 1024, 'ios'],
+  ['apps/mobile/assets/adaptive-icon.png', 1024, 'foreground'],
+  ['apps/mobile/assets/splash-icon.png', 512, false],
 ];
 
 const browser = await chromium.launch();
@@ -32,6 +35,10 @@ for (const [out, size, maskable] of targets) {
   } else if (maskable === 'ios') {
     // iOS masks the icon itself and rejects transparency: full-bleed square.
     inner = `<div style="width:${size}px;height:${size}px">${svg.replace('rx="228"', 'rx="0"')}</div>`;
+  } else if (maskable === 'foreground') {
+    // Android adaptive icon foreground: artwork only, inside the 66% safe zone.
+    const art = svg.replace(/<rect width="1024" height="1024"[^>]*\/>/, '');
+    inner = `<div style="width:${size}px;height:${size}px;display:grid;place-items:center"><div style="width:${size * 0.9}px;height:${size * 0.9}px">${art}</div></div>`;
   } else if (maskable === 'macos') {
     // macOS (Big Sur grid): 824px rounded tile centred on a 1024 canvas with a soft shadow.
     inner = `<div style="width:${size}px;height:${size}px;display:grid;place-items:center"><div style="width:824px;height:824px;filter:drop-shadow(0 10px 18px rgba(0,0,0,.28))">${svg.replace('rx="228"', 'rx="185"')}</div></div>`;

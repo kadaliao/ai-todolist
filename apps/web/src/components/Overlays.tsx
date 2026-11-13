@@ -1,10 +1,9 @@
 import type { Replica } from '@ai-todo/core';
 import { parseQuickAdd } from '@ai-todo/core';
+import { describeRecurrence, formatScheduled, getLocale, type Locale, t } from '@ai-todo/shared';
 import { Download, Loader2, Mic, Sparkles, Upload, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { describeRecurrence, formatScheduled } from '../lib/dates';
-import { getLocale, type Locale, t } from '../lib/i18n';
 import { addTasks } from '../state/actions';
 import { AiError, draftToTask, type ExtractedTask, extractTasks, transcribe } from '../state/ai';
 import { requestNotificationPermission, setReminderSettings, useReminderSettings } from '../state/reminders';

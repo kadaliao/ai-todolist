@@ -120,6 +120,11 @@ export class Db {
     return this.db.prepare('DELETE FROM devices WHERE name = ?').run(name).changes > 0;
   }
 
+  /** Consistent copy of the database while the server keeps running. */
+  backup(path: string): void {
+    this.db.prepare('VACUUM INTO ?').run(path);
+  }
+
   close(): void {
     this.db.close();
   }

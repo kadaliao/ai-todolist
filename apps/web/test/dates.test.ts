@@ -1,6 +1,12 @@
+import {
+  daysBetween,
+  describeRecurrence,
+  formatDay,
+  formatTime,
+  monthGrid,
+  setLocale,
+} from '@ai-todo/shared';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { daysBetween, describeRecurrence, formatDay, formatTime, monthGrid } from '../src/lib/dates';
-import { setLocale } from '../src/lib/i18n';
 
 beforeAll(() => {
   (globalThis as { document?: unknown }).document ??= { documentElement: { lang: '' } };

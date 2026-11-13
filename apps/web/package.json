@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
@@ -21,6 +22,7 @@
   },
   "dependencies": {
     "@ai-todo/core": "workspace:^",
+    "@ai-todo/shared": "workspace:^",
     "@dnd-kit/dom": "0.5.3",
     "@dnd-kit/react": "^0.5.3",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
