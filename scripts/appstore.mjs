@@ -168,6 +168,7 @@ async function metadata() {
     'userGeneratedContent',
     'advertising',
     'healthOrWellnessTopics',
+    'socialMedia',
   ];
   const attrs = {};
   // Only fields Apple currently has (the questionnaire changes over time).
@@ -198,7 +199,12 @@ async function metadata() {
 
   const version = await editableVersion(app.id, true);
   await api('PATCH', `/v1/appStoreVersions/${version.id}`, {
-    data: { type: 'appStoreVersions', id: version.id, attributes: { copyright: listing.copyright } },
+    data: {
+      type: 'appStoreVersions',
+      id: version.id,
+      // The App Store version must match the build's CFBundleShortVersionString.
+      attributes: { copyright: listing.copyright, versionString: appJson.version },
+    },
   });
   const versionLocs =
     version.id === 'dry-run'

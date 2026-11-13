@@ -14,14 +14,14 @@ iPhone 截图来自网页预览加演示数据；小组件和 iPad 截图来自�
 
 ## 基本信息
 
-| 项        | 内容                                        |
-| --------- | ------------------------------------------- |
-| 名称      | Docket                                      |
-| 类别      | 效率（Productivity）                        |
-| 年龄分级  | 4+                                          |
-| 价格      | 免费                                        |
-| Bundle ID | `com.kadaliao.docket`（iOS / Android 相同） |
-| 版本      | 1.0.1                                       |
+| 项        | 内容                                               |
+| --------- | -------------------------------------------------- |
+| 名称      | Docket: AI To-Do List（中文：Docket：AI 待办清单） |
+| 类别      | 效率（Productivity）                               |
+| 年龄分级  | 4+                                                 |
+| 价格      | 免费                                               |
+| Bundle ID | `com.kadaliao.docket`（iOS / Android 相同）        |
+| 版本      | 1.0.1                                              |
 
 ## 中文
 
