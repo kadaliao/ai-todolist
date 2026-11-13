@@ -1,8 +1,9 @@
 //! Docket desktop shell: the web app in a native window, plus what a browser can't do —
 //! a global quick-entry shortcut, a menu-bar icon, and staying alive for reminders.
 
+mod menu;
+
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, RunEvent, WindowEvent,
 };
@@ -40,6 +41,7 @@ fn show_main(app: &AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        .menu(menu::app_menu)
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
@@ -60,11 +62,7 @@ pub fn run() {
                 eprintln!("could not register the quick-entry shortcut: {e}");
             }
 
-            let quick = MenuItem::with_id(app, "quick", "快速添加… / Quick Add", true, Some("CmdOrCtrl+Shift+Space"))?;
-            let show = MenuItem::with_id(app, "show", "显示 Docket / Show Docket", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "退出 / Quit", true, Some("CmdOrCtrl+Q"))?;
-            let sep = PredefinedMenuItem::separator(app)?;
-            let menu = Menu::with_items(app, &[&quick, &show, &sep, &quit])?;
+            let menu = menu::tray_menu(app.handle())?;
             let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
             TrayIconBuilder::with_id("tray")
                 .icon(tray_icon)
@@ -79,7 +77,12 @@ pub fn run() {
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
                         show_main(tray.app_handle());
                     }
                 })
