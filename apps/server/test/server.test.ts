@@ -147,6 +147,7 @@ describe('MCP', () => {
       [
         'add-tasks',
         'complete-tasks',
+        'create-project',
         'delete-tasks',
         'find-tasks',
         'find-tasks-by-date',

@@ -1,5 +1,6 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { Output, streamText } from 'ai';
+import { AGENT_TOOLS, type AgentContext, type AgentMessage, type ModelEvent } from '@ai-todo/core';
+import { type LanguageModel, type ModelMessage, Output, streamText, type ToolSet, tool } from 'ai';
 import { z } from 'zod';
 
 /**
@@ -14,8 +15,13 @@ export interface AiConfig {
   baseURL: string;
   apiKey: string;
   model: string;
-  sttModel?: string;
   structuredOutputs: boolean;
+}
+
+export interface SttConfig {
+  baseURL: string;
+  apiKey: string;
+  model: string;
 }
 
 export interface AiContext {
@@ -109,7 +115,11 @@ async function* elements<T>(
 export class Ai {
   private readonly provider;
 
-  constructor(readonly config: AiConfig) {
+  /** `model` overrides the provider's (tests). */
+  constructor(
+    readonly config: AiConfig,
+    private readonly override?: LanguageModel,
+  ) {
     this.provider = createOpenAICompatible({
       name: 'docket',
       baseURL: config.baseURL.replace(/\/+$/, ''),
@@ -122,10 +132,14 @@ export class Ai {
     return this.config.model;
   }
 
+  private chat(): LanguageModel {
+    return this.override ?? this.provider.chatModel(this.config.model);
+  }
+
   async *extract(text: string, ctx: AiContext, signal?: AbortSignal): AsyncGenerator<ExtractedTask> {
     const stream = elements<z.infer<typeof extractedTask>>((onError) =>
       streamText({
-        model: this.provider.chatModel(this.config.model),
+        model: this.chat(),
         system: extractPrompt(ctx),
         prompt: text.slice(0, 20_000),
         output: Output.array({ element: extractedTask }),
@@ -155,7 +169,7 @@ export class Ai {
   ): AsyncGenerator<{ title: string }> {
     const stream = elements<{ title: string }>((onError) =>
       streamText({
-        model: this.provider.chatModel(this.config.model),
+        model: this.chat(),
         system: breakdownPrompt(ctx, task.existing),
         prompt: task.notes ? `${task.title}\n\n${task.notes.slice(0, 4000)}` : task.title,
         output: Output.array({ element: z.object({ title: z.string() }) }),
@@ -171,18 +185,98 @@ export class Ai {
     }
   }
 
-  /** Speech to text through the provider's OpenAI-compatible `/audio/transcriptions`. */
-  async transcribe(audio: Blob, filename: string): Promise<string> {
-    if (!this.config.sttModel) throw new Error('Speech recognition is not configured (DOCKET_AI_STT_MODEL)');
-    const form = new FormData();
-    form.append('file', audio, filename);
-    form.append('model', this.config.sttModel);
-    const res = await fetch(`${this.config.baseURL.replace(/\/+$/, '')}/audio/transcriptions`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${this.config.apiKey}` },
-      body: form,
+  /**
+   * One step of the in-app assistant: the model sees the conversation and the user's list, and
+   * answers with text and/or tool calls. Tools have no `execute` here: the device runs them on
+   * its own replica and sends the results back with the next request.
+   */
+  async *agentStep(
+    messages: AgentMessage[],
+    ctx: AgentContext,
+    toolNames: string[],
+    signal?: AbortSignal,
+  ): AsyncGenerator<ModelEvent> {
+    const tools: ToolSet = {};
+    for (const t of AGENT_TOOLS) {
+      if (toolNames.includes(t.name))
+        tools[t.name] = tool({ description: t.description, inputSchema: t.schema });
+    }
+    let failure: unknown = null;
+    const result = streamText({
+      model: this.chat(),
+      system: agentPrompt(ctx),
+      messages: toModelMessages(messages),
+      tools,
+      temperature: 0.2,
+      maxRetries: 1,
+      abortSignal: signal,
+      onError: ({ error }) => {
+        failure = error;
+      },
     });
-    if (!res.ok) throw new Error(`transcription failed: HTTP ${res.status}`);
-    return ((await res.json()) as { text: string }).text;
+    for await (const part of result.stream) {
+      if (part.type === 'text-delta' && part.text) yield { type: 'text', text: part.text };
+      else if (part.type === 'tool-call') {
+        yield { type: 'call', call: { id: part.toolCallId, name: part.toolName, input: part.input } };
+      }
+    }
+    if (failure) throw failure;
   }
+}
+
+function toModelMessages(messages: AgentMessage[]): ModelMessage[] {
+  return messages.map((m): ModelMessage => {
+    if (m.role === 'user') return { role: 'user', content: m.text };
+    if (m.role === 'assistant') {
+      return {
+        role: 'assistant',
+        content: [
+          ...(m.text ? [{ type: 'text' as const, text: m.text }] : []),
+          ...(m.calls ?? []).map((c) => ({
+            type: 'tool-call' as const,
+            toolCallId: c.id,
+            toolName: c.name,
+            input: c.input,
+          })),
+        ],
+      };
+    }
+    return {
+      role: 'tool',
+      content: m.results.map((r) => ({
+        type: 'tool-result' as const,
+        toolCallId: r.id,
+        toolName: r.name,
+        output: r.error
+          ? { type: 'error-text' as const, value: String(r.output) }
+          : { type: 'json' as const, value: (r.output ?? null) as never },
+      })),
+    };
+  });
+}
+
+export function agentPrompt(ctx: AgentContext): string {
+  const wd = weekday(ctx.today);
+  const { today, weekday: _w, now, timeZone, locale, ...lists } = ctx;
+  return [
+    'You are the assistant inside Docket, a to-do app. The user talks to you, usually by voice and often in Chinese, and you operate their task list with the tools.',
+    '',
+    'How to work:',
+    '- Do what was asked with the tools; don’t just describe it. A request may need several changes: make all the calls.',
+    '- The input is a speech transcript and may contain recognition errors (homophones, wrong characters, no punctuation). Match tasks, projects and labels by meaning and sound (“粥报” → “周报”). If one task clearly matches, act on it; ask only when several plausibly match or none does.',
+    '- The lists below show overdue, today’s, the next 7 days’ and undated Inbox tasks with their ids (t1, t2…). Use those ids. For anything else call find-tasks first, with a short keyword.',
+    '- “这个 / this / it” means the focused task, when there is one.',
+    '- New things to do → add-tasks, one call for all of them. Copy the date/time wording into `when` (“明天下午三点”, “下周五”, “每周一”); never compute dates yourself. Tasks with a time remind at that time automatically.',
+    '- Finished → complete-tasks. Postpone or move to a day → reschedule-tasks. Other edits → update-tasks. Delete only when the user asks to delete or drop a task.',
+    '- Breaking a task into steps → add-tasks with parentId. Undo requests (“撤销”, “刚才那个不对”) → undo-last-change.',
+    '- Questions about the list (“今天还有什么”) → answer from the lists or read tools without changing anything.',
+    '- The app holds big changes (deleting, completing or editing many tasks) for the user’s confirmation. When a tool result says so, say what will change and ask.',
+    '- Never add tasks the user didn’t ask for. Don’t create projects or labels unless asked.',
+    '- The app’s words: Inbox = 收件箱, trash = 回收站, project = 项目, label = 标签, subtask = 子任务.',
+    '',
+    'Reply after the tools in the user’s language, in one short spoken-style sentence: what you did, or the answer. It may be read aloud, so no markdown, lists, ids or dates in YYYY-MM-DD; the app shows the details. If you must ask, ask one short question.',
+    '',
+    `Now: ${today} (${wd.en}, ${wd.zh}) ${now}, time zone ${timeZone}, locale ${locale}.`,
+    `The user’s list when they spoke (tool results show what changed since): ${JSON.stringify(lists)}`,
+  ].join('\n');
 }

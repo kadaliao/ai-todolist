@@ -1,4 +1,4 @@
-import { decodeHlc, type Op } from '@ai-todo/core';
+import { type AgentContext, type AgentMessage, decodeHlc, type Op } from '@ai-todo/core';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -9,6 +9,7 @@ import type { Ai, AiContext } from './ai';
 import type { Db, Device } from './db';
 import { type Hub, pushSchema } from './hub';
 import { createMcpServer } from './mcp';
+import type { Stt } from './stt';
 
 /**
  * HTTP API. Every route except `/` and `/api/ping` needs a device token
@@ -31,11 +32,13 @@ export function createApp(opts: {
   db: Db;
   hub: Hub;
   ai: Ai | null;
+  stt?: Stt | null;
   upgradeWebSocket?: UpgradeWebSocket;
   /** Built web app to serve at `/` (same origin as the API). */
   webDir?: string;
 }) {
   const { db, hub, ai } = opts;
+  const stt = opts.stt ?? null;
   const app = new Hono<Env>();
 
   app.use(
@@ -70,7 +73,9 @@ export function createApp(opts: {
       ok: true,
       device: c.get('device').name,
       cursor: db.maxSeq(),
-      ai: ai ? { available: true, model: ai.model, speech: !!ai.config.sttModel } : { available: false },
+      ai: ai
+        ? { available: true, model: ai.model, agent: true, speech: !!stt }
+        : { available: false, speech: !!stt },
     }),
   );
 
@@ -167,19 +172,70 @@ export function createApp(opts: {
     );
   });
 
-  app.post('/api/ai/transcribe', bodyLimit({ maxSize: 25 * 1024 * 1024 }), async (c) => {
+  const agentMessage = z.discriminatedUnion('role', [
+    z.object({ role: z.literal('user'), text: z.string().max(20_000) }),
+    z.object({
+      role: z.literal('assistant'),
+      text: z.string().max(20_000),
+      calls: z
+        .array(z.object({ id: z.string().max(200), name: z.string().max(64), input: z.unknown() }))
+        .max(50)
+        .optional(),
+    }),
+    z.object({
+      role: z.literal('tool'),
+      results: z
+        .array(
+          z.object({
+            id: z.string().max(200),
+            name: z.string().max(64),
+            output: z.unknown(),
+            error: z.literal(true).optional(),
+          }),
+        )
+        .max(50),
+    }),
+  ]);
+
+  /** One model step for the in-app assistant; the device runs the tools (see core/agent). */
+  app.post('/api/agent', bodyLimit({ maxSize: 1024 * 1024 }), async (c) => {
     if (!ai) return c.json({ error: 'AI is not configured on the server' }, 503);
+    const body = z
+      .object({
+        messages: z.array(agentMessage).min(1).max(120),
+        context: z.record(z.string(), z.unknown()),
+        tools: z.array(z.string().max(64)).max(50),
+      })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: 'invalid request' }, 400);
+    const { messages, context, tools } = body.data;
+    return ndjson(
+      (signal) => ai.agentStep(messages as AgentMessage[], context as unknown as AgentContext, tools, signal),
+      c.req.raw.signal,
+    );
+  });
+
+  app.post('/api/ai/transcribe', bodyLimit({ maxSize: 25 * 1024 * 1024 }), async (c) => {
+    if (!stt) return c.json({ error: 'Cloud speech recognition is not configured on the server' }, 503);
     const type = c.req.header('Content-Type') ?? 'audio/webm';
     const ext =
-      type.includes('mp4') || type.includes('m4a')
+      type.includes('mp4') || type.includes('m4a') || type.includes('aac')
         ? 'm4a'
         : type.includes('wav')
           ? 'wav'
           : type.includes('mpeg')
             ? 'mp3'
-            : 'webm';
+            : type.includes('ogg')
+              ? 'ogg'
+              : 'webm';
+    const language = /^[a-z]{2}$/.test(c.req.query('lang') ?? '') ? c.req.query('lang') : undefined;
+    const hint = (c.req.query('hint') ?? '').slice(0, 800) || undefined;
     try {
-      const text = await ai.transcribe(new Blob([await c.req.arrayBuffer()], { type }), `speech.${ext}`);
+      const text = await stt.transcribe(new Blob([await c.req.arrayBuffer()], { type }), `speech.${ext}`, {
+        ...(language ? { language } : {}),
+        ...(hint ? { hint } : {}),
+        signal: c.req.raw.signal,
+      });
       return c.json({ text });
     } catch (e) {
       return c.json({ error: friendlyAiError(e) }, 502);
@@ -248,7 +304,11 @@ function mountWeb(app: Hono<Env>, dir: string) {
 
 function friendlyAiError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
-  if (/401|unauthor|api key/i.test(msg)) return 'AI provider rejected the API key';
+  if (/not allowed to use|model permission|does not have access/i.test(msg)) {
+    return `The provider’s key can’t use this model: ${msg.slice(0, 200)}`;
+  }
+  if (/\b401\b|unauthori[sz]ed|(invalid|incorrect).{0,20}api key/i.test(msg))
+    return 'AI provider rejected the API key';
   if (/429|rate/i.test(msg)) return 'AI provider is rate limiting; try again shortly';
   if (/timeout|ETIMEDOUT|ECONNRESET|fetch failed/i.test(msg)) return 'Could not reach the AI provider';
   return msg.slice(0, 300);

@@ -1,3 +1,4 @@
+export * from './agent';
 export { clone } from './clone';
 export * from './commands';
 export * from './model';
