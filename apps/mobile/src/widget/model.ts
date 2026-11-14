@@ -1,4 +1,4 @@
-import { addDays, type Replica, type Task, today as todayView, upcoming } from '@ai-todo/core';
+import { addDays, listedDate, type Replica, type Task, today as todayView, upcoming } from '@ai-todo/core';
 
 /**
  * What the home-screen widgets show: overdue, today's and the next few days' tasks. The same shape
@@ -31,7 +31,8 @@ export function buildWidgetSnapshot(r: Replica, locale: string): WidgetSnapshot 
     return {
       id: task.id,
       title: task.title,
-      date: task.scheduled?.date ?? day,
+      // Deadline-only tasks sit on their deadline (the widget works out “today” per entry).
+      date: listedDate(task) ?? day,
       time: task.scheduled?.time ?? null,
       priority: task.priority,
       project: project?.name ?? null,

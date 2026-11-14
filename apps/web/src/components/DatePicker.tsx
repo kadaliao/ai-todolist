@@ -27,7 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { timeZone } from '../state/replica';
+import { parseContext } from '../state/actions';
 import { cx } from './ui';
 
 export interface RecurrenceValue {
@@ -45,6 +45,8 @@ export interface DatePickerProps {
   /** Applied together, from the natural-language box. */
   onParsed?: (scheduled: Scheduled, recurrence: RecurrenceValue | null) => void;
   onClose?: () => void;
+  /** Just a day (deadlines): no time, no repeat; “周五之前” in the box counts too. */
+  dateOnly?: boolean;
 }
 
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
@@ -58,6 +60,7 @@ export function DatePicker({
   onRecurrence,
   onParsed,
   onClose,
+  dateOnly,
 }: DatePickerProps) {
   const selected = value?.date ?? null;
   const [cursor, setCursor] = useState(() => {
@@ -71,9 +74,10 @@ export function DatePicker({
 
   const parsed = useMemo(() => {
     if (!text.trim()) return null;
-    const r = parseQuickAdd(text, { now: new Date(), timeZone: timeZone() });
+    const r = parseQuickAdd(text, parseContext());
+    if (dateOnly && !r.scheduled && r.deadline) return { ...r, scheduled: { date: r.deadline } };
     return r.scheduled ? r : null;
-  }, [text]);
+  }, [text, dateOnly]);
 
   const weekend = addDays(today, Math.max(0, 6 - isoWeekday(today)));
   const nextWeek = addDays(today, 8 - isoWeekday(today));
@@ -115,7 +119,7 @@ export function DatePicker({
 
   const customParsed = useMemo(() => {
     if (!customRepeat.trim()) return null;
-    const r = parseQuickAdd(customRepeat, { now: new Date(), timeZone: timeZone() });
+    const r = parseQuickAdd(customRepeat, parseContext());
     return r.recurrence ?? null;
   }, [customRepeat]);
 
@@ -184,7 +188,7 @@ export function DatePicker({
             className="flex h-8 items-center gap-2.5 rounded-[6px] px-2 text-left hover:bg-hover"
           >
             <X className="size-[15px] text-ink-3" />
-            <span className="flex-1">{t('date.none')}</span>
+            <span className="flex-1">{t(dateOnly ? 'deadline.clear' : 'date.none')}</span>
           </button>
         )}
       </div>
@@ -259,7 +263,7 @@ export function DatePicker({
         </div>
       </div>
 
-      <div className="mt-2 flex flex-col gap-1 border-t border-line pt-2">
+      <div className={cx('mt-2 flex flex-col gap-1 border-t border-line pt-2', dateOnly && 'hidden')}>
         {showTime || value?.time ? (
           <div className="flex h-8 items-center gap-2.5 px-2">
             <Clock className="size-[15px] text-ink-2" />

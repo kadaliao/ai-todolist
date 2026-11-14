@@ -16,9 +16,9 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Txt } from '../components/ui';
-import { addTasks, getReplica, toast, undo } from '../state/actions';
+import { addTasks, getReplica, parseContext, toast, undo } from '../state/actions';
 import { draftToTask, type ExtractedTask, extractTasks } from '../state/ai';
-import { timeZone, useToday } from '../state/replica';
+import { useToday } from '../state/replica';
 import { useColors } from '../theme';
 
 interface Draft {
@@ -66,7 +66,7 @@ export default function DumpScreen() {
       .filter((s) => s.length > 1);
     setDrafts(
       parts.map((p) => {
-        const parsed = parseQuickAdd(p, { now: new Date(), timeZone: timeZone() });
+        const parsed = parseQuickAdd(p, parseContext());
         const when = parsed.tokens
           .filter((x) => x.kind === 'date' || x.kind === 'recurrence')
           .map((x) => x.text)

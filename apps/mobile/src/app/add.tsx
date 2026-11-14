@@ -7,16 +7,16 @@ import {
   parseQuickAdd,
   sortByOrder,
 } from '@ai-todo/core';
-import { describeRecurrence, formatScheduled, t } from '@ai-todo/shared';
+import { describeRecurrence, formatDeadline, formatScheduled, t } from '@ai-todo/shared';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams } from 'expo-router';
-import { Calendar, Flag, Hash, Inbox, Link2, Repeat, Tag } from 'lucide-react-native';
+import { Calendar, Flag, Hash, Hourglass, Inbox, Link2, Repeat, Tag } from 'lucide-react-native';
 import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip, Txt } from '../components/ui';
-import { addTasks, run } from '../state/actions';
-import { timeZone, useQuery, useToday } from '../state/replica';
+import { addTasks, parseContext, run } from '../state/actions';
+import { useQuery, useToday } from '../state/replica';
 import { PRIORITY_COLOR, useColors } from '../theme';
 
 /** Quick add: type naturally, see what was understood, tap a chip to undo a recognition. */
@@ -52,7 +52,7 @@ export default function AddSheet() {
       .map((x) => ({ id: x.id, name: x.name, projectId: x.projectId })),
   }));
   const parsed = useMemo(
-    () => parseQuickAdd(text, { now: new Date(), timeZone: timeZone(), ...names, ignore }),
+    () => parseQuickAdd(text, { ...parseContext(), ...names, ignore }),
     [text, names, ignore],
   );
 
@@ -83,6 +83,7 @@ export default function AddSheet() {
         ...(labels.length ? { labels } : {}),
         ...(scheduled ? { scheduled } : {}),
         ...(parsed.recurrence && scheduled ? { recurrence: parsed.recurrence } : {}),
+        ...(parsed.deadline ? { deadline: parsed.deadline } : {}),
         ...(notes ? { notes } : {}),
       },
     ]);
@@ -155,6 +156,11 @@ export default function AddSheet() {
         {parsed.recurrence && scheduled ? (
           <Chip active icon={<Repeat size={15} color={c.jade} />}>
             {describeRecurrence(parsed.recurrence)}
+          </Chip>
+        ) : null}
+        {parsed.deadline ? (
+          <Chip active tone={c.p1} icon={<Hourglass size={15} color={c.p1} />}>
+            {formatDeadline(parsed.deadline, today)}
           </Chip>
         ) : null}
         <Chip

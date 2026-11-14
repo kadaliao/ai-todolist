@@ -1,11 +1,12 @@
 import { createTask, createTasks, moveTasks, type Priority, sortByOrder, type Task } from '@ai-todo/core';
-import { describeRecurrence, formatScheduled, getLocale, t } from '@ai-todo/shared';
+import { describeRecurrence, formatDeadline, formatScheduled, getLocale, t } from '@ai-todo/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   Bell,
   Calendar,
   Flag,
   Hash,
+  Hourglass,
   Inbox,
   Mic,
   Plus,
@@ -137,6 +138,13 @@ function Detail({ task, today }: { task: Task; today: string }) {
           value={task.scheduled ? formatScheduled(task.scheduled, today) : t('task.noDate')}
           tone={task.scheduled && task.scheduled.date < today && !task.completedAt ? c.p1 : undefined}
           onPress={() => router.push({ pathname: '/schedule', params: { ids: task.id } })}
+        />
+        <Field
+          icon={<Hourglass size={19} color={task.deadline ? c.p1 : c.ink3} />}
+          label={t('deadline.set')}
+          value={task.deadline ? formatDeadline(task.deadline, today) : t('deadline.none')}
+          tone={task.deadline && task.deadline <= today && !task.completedAt ? c.p1 : undefined}
+          onPress={() => router.push({ pathname: '/schedule', params: { ids: task.id, field: 'deadline' } })}
         />
         {task.recurrence && (
           <Field

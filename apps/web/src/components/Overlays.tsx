@@ -1,14 +1,23 @@
-import type { Replica } from '@ai-todo/core';
-import { parseQuickAdd, summarize } from '@ai-todo/core';
+import type { DayParts, Replica } from '@ai-todo/core';
+import {
+  DAY_PART_NAMES,
+  DAY_PARTS_KEY,
+  dayParts,
+  deleteMemory,
+  memories,
+  parseQuickAdd,
+  setSetting,
+  summarize,
+} from '@ai-todo/core';
 import { describeRecurrence, formatScheduled, getLocale, type Locale, t } from '@ai-todo/shared';
 import { Download, Loader2, Mic, Sparkles, Upload, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { addTasks } from '../state/actions';
+import { addTasks, parseContext, run } from '../state/actions';
 import { AiError, draftToTask, type ExtractedTask, extractTasks, transcribe } from '../state/ai';
 import { clearJournal, exportJournal, getJournal, setJournalEnabled, useJournal } from '../state/journal';
 import { requestNotificationPermission, setReminderSettings, useReminderSettings } from '../state/reminders';
-import { timeZone, useReplica, useToday } from '../state/replica';
+import { useQuery, useReplica, useToday } from '../state/replica';
 import { connectSync, disconnectSync, useSyncStatus, useSyncStore } from '../state/sync';
 import { useUI } from '../state/ui';
 import { type SpeechMode, setSpeechMode, setVoiceWords, speechMode, voiceWords } from '../state/voice';
@@ -267,6 +276,8 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
           </p>
           <SpeechSetting />
           <VocabularySetting />
+          <MemorySetting />
+          <DayPartsSetting />
           <VoiceLogSetting />
         </Section>
 
@@ -356,6 +367,67 @@ function VocabularySetting() {
   );
 }
 
+/** What the assistant was told to remember (synced), with a way to drop each. */
+function MemorySetting() {
+  const list = useQuery((s) => memories(s));
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      <p className="text-[12.5px] font-medium text-ink-2">{t('agent.memory')}</p>
+      {list.length ? (
+        <ul className="flex flex-col rounded-[8px] border border-line">
+          {list.map((m) => (
+            <li
+              key={m.id}
+              className="flex items-start gap-2 border-line px-2.5 py-1.5 text-[13px] [&+&]:border-t"
+            >
+              <span className="min-w-0 flex-1">{m.text}</span>
+              <button
+                type="button"
+                aria-label={t('agent.memory.delete')}
+                onClick={() => run(deleteMemory(m.id))}
+                className="grid size-5 shrink-0 place-items-center rounded-[4px] text-ink-3 hover:bg-hover hover:text-ink"
+              >
+                <X className="size-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[12.5px] text-ink-3">{t('agent.memory.empty')}</p>
+      )}
+      <p className="text-[12px] text-ink-3">{t('agent.memory.help')}</p>
+    </div>
+  );
+}
+
+/** The times bare 早上 / 中午 / 下午 / 晚上 stand for (synced). */
+function DayPartsSetting() {
+  const parts = useQuery((s) => dayParts(s));
+  const set = (k: keyof DayParts, v: string) => {
+    if (!/^\d{2}:\d{2}$/.test(v) || parts[k] === v) return;
+    run(setSetting(DAY_PARTS_KEY, { ...parts, [k]: v }));
+  };
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      <p className="text-[12.5px] font-medium text-ink-2">{t('dayParts.title')}</p>
+      <div className="grid grid-cols-4 gap-2">
+        {DAY_PART_NAMES.map((k) => (
+          <label key={k} className="flex flex-col gap-0.5 text-[12px] text-ink-3">
+            {t(`dayParts.${k}`)}
+            <input
+              type="time"
+              value={parts[k]}
+              onChange={(e) => set(k, e.target.value)}
+              className="h-8 rounded-[7px] border border-line bg-surface px-1.5 text-[13px] tabular-nums text-ink outline-none focus:border-jade"
+            />
+          </label>
+        ))}
+      </div>
+      <p className="text-[12px] text-ink-3">{t('dayParts.help')}</p>
+    </div>
+  );
+}
+
 function VoiceLogSetting() {
   const enabled = useJournal((s) => s.enabled);
   const records = useJournal((s) => s.records);
@@ -403,7 +475,7 @@ function VoiceLogSetting() {
 }
 
 function RemindersSection() {
-  const { enabled, atTimeByDefault, permission } = useReminderSettings();
+  const { enabled, atTimeByDefault, briefs, permission } = useReminderSettings();
   const zh = getLocale() === 'zh';
   return (
     <Section title={zh ? '提醒' : 'Reminders'}>
@@ -429,6 +501,10 @@ function RemindersSection() {
       <Row label={zh ? '有时间的任务默认准时提醒' : 'Remind at the task’s time by default'}>
         <Toggle checked={atTimeByDefault} onChange={(v) => setReminderSettings({ atTimeByDefault: v })} />
       </Row>
+      <Row label={t('brief.setting')}>
+        <Toggle checked={briefs} onChange={(v) => setReminderSettings({ briefs: v })} />
+      </Row>
+      <p className="text-[12px] text-ink-3">{t('brief.settingHelp')}</p>
       {permission === 'denied' && (
         <p className="text-[12.5px] text-ink-3">
           {zh
@@ -448,7 +524,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={cx(
-        'relative h-[22px] w-[38px] rounded-full transition-colors',
+        'relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors',
         checked ? 'bg-jade' : 'bg-line-strong',
       )}
     >
@@ -609,7 +685,7 @@ export function BrainDump() {
       .filter((s) => s.length > 1);
     setDrafts(
       parts.map((p) => {
-        const parsed = parseQuickAdd(p, { now: new Date(), timeZone: timeZone() });
+        const parsed = parseQuickAdd(p, parseContext());
         return {
           key: ++seq.current,
           include: true,

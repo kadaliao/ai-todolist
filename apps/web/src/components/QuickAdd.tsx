@@ -7,11 +7,11 @@ import {
   type Scheduled,
   sortByOrder,
 } from '@ai-todo/core';
-import { formatScheduled, t } from '@ai-todo/shared';
-import { Calendar, Flag, Hash, Inbox, Plus, Repeat, Sparkles, Tag, X } from 'lucide-react';
+import { formatDeadline, formatScheduled, t } from '@ai-todo/shared';
+import { Calendar, Flag, Hash, Hourglass, Inbox, Plus, Repeat, Sparkles, Tag, X } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { addLabel, addProject, addTasks, getReplica } from '../state/actions';
-import { timeZone, useQuery, useToday } from '../state/replica';
+import { addLabel, addProject, addTasks, getReplica, parseContext } from '../state/actions';
+import { useQuery, useToday } from '../state/replica';
 import { useUI } from '../state/ui';
 import { DatePicker, type RecurrenceValue } from './DatePicker';
 import { LabelList, PRIORITY_COLOR, PriorityList, ProjectList } from './Pickers';
@@ -30,6 +30,7 @@ export interface QuickAddDefaults {
 
 interface Overrides {
   scheduled?: Scheduled | null;
+  deadline?: LocalDate | null;
   recurrence?: RecurrenceValue | null;
   priority?: Priority;
   project?: { projectId: string | null; sectionId: string | null };
@@ -82,8 +83,7 @@ export function QuickAdd({
   const parsed: QuickAddResult = useMemo(
     () =>
       parseQuickAdd(text, {
-        now: new Date(),
-        timeZone: timeZone(),
+        ...parseContext(),
         projects: names.projects,
         sections: names.sections,
         labels: names.labels,
@@ -270,6 +270,24 @@ export function QuickAdd({
 
           <Popover>
             <PopoverTrigger asChild>
+              <Chip icon={<Hourglass className="size-3.5" />} active={!!effective.deadline} tone="p1">
+                {effective.deadline ? formatDeadline(effective.deadline, today) : t('deadline.set')}
+              </Chip>
+            </PopoverTrigger>
+            <PopoverContent align="start">
+              <DatePicker
+                dateOnly
+                today={today}
+                value={effective.deadline ? { date: effective.deadline } : null}
+                recurrence={null}
+                onDate={(date) => setOver((o) => ({ ...o, deadline: date }))}
+                onTime={() => {}}
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Popover>
+            <PopoverTrigger asChild>
               <Chip
                 icon={
                   effective.project.projectId ? <Hash className="size-3.5" /> : <Inbox className="size-3.5" />
@@ -405,7 +423,7 @@ export function addFromText(text: string, ignore: string[] = []): void {
       .filter((l) => !l.deletedAt)
       .map((l) => ({ id: l.id, name: l.name, color: l.color })),
   };
-  const parsed = parseQuickAdd(text, { now: new Date(), timeZone: timeZone(), ...names, ignore });
+  const parsed = parseQuickAdd(text, { ...parseContext(), ...names, ignore });
   const input = toInput(resolve(parsed, {}, {}));
   if (!input.title) return;
   const ids = addTasks([input]);
@@ -424,9 +442,13 @@ function visibleIn(
 ): boolean {
   switch (route.kind) {
     case 'today':
-      return !!input.scheduled && input.scheduled.date <= today;
+      return (
+        (!!input.scheduled && input.scheduled.date <= today) || (!!input.deadline && input.deadline <= today)
+      );
     case 'upcoming':
-      return !!input.scheduled && input.scheduled.date >= today;
+      return (
+        (!!input.scheduled && input.scheduled.date >= today) || (!!input.deadline && input.deadline >= today)
+      );
     case 'inbox':
       return !input.projectId;
     case 'project':
@@ -496,12 +518,13 @@ function projectLabel(names: Names, projectId: string, sectionId: string | null)
 }
 
 function parseLine(line: string, names: Names): QuickAddResult {
-  return parseQuickAdd(line, { now: new Date(), timeZone: timeZone(), ...names });
+  return parseQuickAdd(line, { ...parseContext(), ...names });
 }
 
 interface Effective {
   title: string;
   scheduled: Scheduled | null;
+  deadline: LocalDate | null;
   recurrence: RecurrenceValue | null;
   priority: Priority;
   project: { projectId: string | null; sectionId: string | null; newName?: string };
@@ -534,6 +557,7 @@ function resolve(parsed: QuickAddResult, over: Overrides, defaults: QuickAddDefa
   return {
     title: parsed.title,
     scheduled,
+    deadline: over.deadline !== undefined ? over.deadline : (parsed.deadline ?? null),
     recurrence: scheduled ? recurrence : null,
     priority: over.priority ?? parsed.priority ?? 0,
     project,
@@ -553,6 +577,7 @@ function toInput(e: Effective): NewTask {
     priority: e.priority,
     ...(labels.length ? { labels } : {}),
     ...(e.scheduled ? { scheduled: e.scheduled } : {}),
+    ...(e.deadline ? { deadline: e.deadline } : {}),
     ...(e.recurrence ? { recurrence: e.recurrence } : {}),
   };
 }

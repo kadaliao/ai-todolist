@@ -1,5 +1,5 @@
-import { dueReminders, type Replica } from '@ai-todo/core';
-import { formatTime, getLocale } from '@ai-todo/shared';
+import { dayParts, dueReminders, type Replica } from '@ai-todo/core';
+import { formatTime, getLocale, t, upcomingBriefs } from '@ai-todo/shared';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { Platform } from 'react-native';
@@ -11,6 +11,9 @@ import { getSetting, setSetting } from './storage';
  * Reminders as OS notifications, so they fire while the app is closed. Whenever data changes the
  * next reminders are re-planned (iOS keeps at most 64 pending; we schedule the next 40 within
  * two weeks). Tapping a notification opens the task.
+ *
+ * Also a morning plan (at the synced “morning” time) and a Sunday-evening look back, unless
+ * turned off; tapping the plan opens Today, the look back asks the assistant to sum up the week.
  */
 
 if (Platform.OS !== 'web')
@@ -27,20 +30,25 @@ interface NotifyState {
   permission: 'granted' | 'denied' | 'undetermined';
   enabled: boolean;
   atTimeByDefault: boolean;
+  briefs: boolean;
 }
 
 export const useNotify = create<NotifyState>(() => ({
   permission: 'undetermined',
   enabled: getSetting<boolean>('reminders.enabled') ?? true,
   atTimeByDefault: getSetting<boolean>('reminders.atTime') ?? true,
+  briefs: getSetting<boolean>('reminders.briefs') ?? true,
 }));
 
 let replan: (() => void) | null = null;
 
-export function setNotifySettings(patch: Partial<Pick<NotifyState, 'enabled' | 'atTimeByDefault'>>): void {
+export function setNotifySettings(
+  patch: Partial<Pick<NotifyState, 'enabled' | 'atTimeByDefault' | 'briefs'>>,
+): void {
   useNotify.setState(patch);
   if (patch.enabled !== undefined) setSetting('reminders.enabled', patch.enabled);
   if (patch.atTimeByDefault !== undefined) setSetting('reminders.atTime', patch.atTimeByDefault);
+  if (patch.briefs !== undefined) setSetting('reminders.briefs', patch.briefs);
   replan?.();
 }
 
@@ -79,7 +87,14 @@ export function startNotifications(replica: Replica): () => void {
     const due = dueReminders(replica.store.all('task'), timeZone(), s.atTimeByDefault)
       .filter((d) => d.at > now + 5_000 && d.at < horizon)
       .slice(0, 40);
-    const signature = due.map((d) => `${d.key}:${d.task.title}`).join('|');
+    const parts = dayParts(replica.store);
+    const briefs = s.briefs
+      ? upcomingBriefs(replica.store, { now, timeZone: timeZone(), ...parts, days: 7 })
+      : [];
+    const signature = [
+      ...due.map((d) => `${d.key}:${d.task.title}`),
+      ...briefs.map((b) => `${b.kind}:${b.at}:${b.title}:${b.body}`),
+    ].join('|');
     if (signature === lastPlan) return;
     lastPlan = signature;
     await Notifications.cancelAllScheduledNotificationsAsync();
@@ -100,6 +115,16 @@ export function startNotifications(replica: Replica): () => void {
         },
       });
     }
+    for (const b of briefs) {
+      await Notifications.scheduleNotificationAsync({
+        content: { title: b.title, body: b.body, data: { brief: b.kind } },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: new Date(b.at),
+          ...(Platform.OS === 'android' ? { channelId: 'reminders' } : {}),
+        },
+      });
+    }
   };
 
   replan = () => {
@@ -112,14 +137,18 @@ export function startNotifications(replica: Replica): () => void {
   });
   const unsub = replica.subscribe(() => replan?.());
 
-  const open = (taskId: unknown) => {
-    if (typeof taskId === 'string') router.push({ pathname: '/task/[id]', params: { id: taskId } });
+  const open = (data: Record<string, unknown> | undefined) => {
+    if (typeof data?.taskId === 'string')
+      router.push({ pathname: '/task/[id]', params: { id: data.taskId } });
+    else if (data?.brief === 'plan') router.navigate('/(tabs)');
+    else if (data?.brief === 'review')
+      router.push({ pathname: '/assistant', params: { say: t('agent.suggest.review') } });
   };
   const sub = Notifications.addNotificationResponseReceivedListener((r) =>
-    open(r.notification.request.content.data?.taskId),
+    open(r.notification.request.content.data),
   );
   const last = Notifications.getLastNotificationResponse();
-  if (last) setTimeout(() => open(last.notification.request.content.data?.taskId), 500);
+  if (last) setTimeout(() => open(last.notification.request.content.data), 500);
 
   return () => {
     clearTimeout(timer);

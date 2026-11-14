@@ -1,10 +1,18 @@
 import { createTask, createTasks, type Reminder, sortByOrder, type Task, updateTask } from '@ai-todo/core';
-import { describeRecurrence, formatScheduled, getLocale, t, weekdayName } from '@ai-todo/shared';
+import {
+  describeRecurrence,
+  formatDeadline,
+  formatScheduled,
+  getLocale,
+  t,
+  weekdayName,
+} from '@ai-todo/shared';
 import {
   Bell,
   Calendar,
   Flag,
   Hash,
+  Hourglass,
   Inbox,
   Loader2,
   MoreHorizontal,
@@ -161,6 +169,38 @@ function DetailBody({ task, today }: { task: Task; today: string }) {
                       }),
                     });
                   }}
+                />
+              </PopoverContent>
+            </Popover>
+          </Field>
+
+          <Field
+            icon={<Hourglass className={cx('size-4', task.deadline && 'text-p1')} />}
+            label={t('deadline.set')}
+          >
+            <Popover>
+              <PopoverTrigger asChild>
+                <FieldButton empty={!task.deadline}>
+                  {task.deadline ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className={cx(task.deadline <= today && !task.completedAt && 'text-p1')}>
+                        {formatDeadline(task.deadline, today)}
+                      </span>
+                      <span className="text-ink-3">{weekdayName(task.deadline)}</span>
+                    </span>
+                  ) : (
+                    t('deadline.none')
+                  )}
+                </FieldButton>
+              </PopoverTrigger>
+              <PopoverContent align="start" side="left" sideOffset={10}>
+                <DatePicker
+                  dateOnly
+                  today={today}
+                  value={task.deadline ? { date: task.deadline } : null}
+                  recurrence={null}
+                  onDate={(date) => editTask(task.id, { deadline: date })}
+                  onTime={() => {}}
                 />
               </PopoverContent>
             </Popover>

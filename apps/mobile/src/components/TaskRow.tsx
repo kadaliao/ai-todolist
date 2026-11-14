@@ -1,8 +1,25 @@
 import { addDays, type Task } from '@ai-todo/core';
-import { dateTone, describeRecurrence, formatScheduled, formatTime, t } from '@ai-todo/shared';
+import {
+  dateTone,
+  deadlineTone,
+  describeRecurrence,
+  formatDeadline,
+  formatScheduled,
+  formatTime,
+  t,
+} from '@ai-todo/shared';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { CalendarDays, Check, FileText, Repeat, Sparkles, SunMedium, Trash2 } from 'lucide-react-native';
+import {
+  CalendarDays,
+  Check,
+  FileText,
+  Hourglass,
+  Repeat,
+  Sparkles,
+  SunMedium,
+  Trash2,
+} from 'lucide-react-native';
 import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -77,6 +94,8 @@ export const TaskRow = memo(function TaskRow({
 
   const tone = dateTone(task.scheduled, today);
   const dateColor = tone === 'overdue' ? c.p1 : tone === 'today' ? c.jade : c.ink2;
+  const due = task.deadline ? deadlineTone(task.deadline, today) : null;
+  const dueColor = due === 'overdue' || due === 'today' ? c.p1 : due === 'soon' ? c.p2 : c.ink2;
 
   const open = () => router.push({ pathname: '/task/[id]', params: { id: task.id } });
   // VoiceOver / TalkBack read the row as one element; the swipe actions are offered as actions.
@@ -84,6 +103,7 @@ export const TaskRow = memo(function TaskRow({
     task.title || t('task.untitled'),
     done ? t('a11y.done') : null,
     task.scheduled ? formatScheduled(task.scheduled, today) : null,
+    task.deadline ? formatDeadline(task.deadline, today) : null,
     task.recurrence ? describeRecurrence(task.recurrence) : null,
     task.priority ? t(`priority.${task.priority}` as 'priority.1') : null,
     meta.project?.name ?? null,
@@ -184,6 +204,7 @@ export const TaskRow = memo(function TaskRow({
               {task.title || t('task.untitled')}
             </Txt>
             {(task.scheduled ||
+              task.deadline ||
               meta.project ||
               meta.labels.length ||
               meta.kids ||
@@ -206,6 +227,14 @@ export const TaskRow = memo(function TaskRow({
                   </View>
                 ) : task.recurrence ? (
                   <Repeat size={12} color={c.ink3} />
+                ) : null}
+                {task.deadline ? (
+                  <View style={styles.metaItem}>
+                    <Hourglass size={12} color={dueColor} />
+                    <Txt variant="meta" tone={dueColor} style={{ fontWeight: '500' }}>
+                      {formatDeadline(task.deadline, today)}
+                    </Txt>
+                  </View>
                 ) : null}
                 {meta.kids ? <Txt variant="meta">{t('subtasks.progress', meta.kids)}</Txt> : null}
                 {task.notes ? <FileText size={12} color={c.ink3} /> : null}

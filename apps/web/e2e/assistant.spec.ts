@@ -117,3 +117,37 @@ test('model errors are shown with a retry', async ({ page }) => {
   await expect(page.getByText(/rate limiting/)).toBeVisible();
   await expect(page.getByRole('button', { name: '再试一次' })).toBeVisible();
 });
+
+test('asks which one when two tasks match; tapping an answer finishes it', async ({ page }) => {
+  await mockServer(page, [
+    () => [
+      call('ask-user', {
+        question: '是“给张三打电话”还是“给张三发合同”？',
+        options: ['给张三打电话', '给张三发合同'],
+      }),
+    ],
+    (b) => [
+      call('complete-tasks', {
+        ids: [b.context.todayTasks.find((t) => t.title === '给张三打电话')?.id],
+        reply: '打电话那条完成了。',
+      }),
+    ],
+  ]);
+  await page.goto('/#/today');
+  await connect(page);
+  const qa = page.getByLabel('添加任务');
+  for (const title of ['给张三打电话', '给张三发合同']) {
+    await qa.fill(title);
+    await qa.press('Enter');
+  }
+  await page.keyboard.press('Meta+j');
+  const panel = page.getByRole('dialog', { name: '跟 Docket 说' });
+  const box = panel.getByPlaceholder('说或输入要做的事…');
+  await box.fill('张三那个做完了');
+  await box.press('Enter');
+  await expect(panel.getByText('是“给张三打电话”还是“给张三发合同”？')).toBeVisible();
+  await panel.getByRole('button', { name: '给张三打电话' }).click();
+  await expect(panel.getByText('打电话那条完成了。')).toBeVisible();
+  await expect(row(page, '给张三打电话')).toHaveCount(0);
+  await expect(row(page, '给张三发合同')).toBeVisible();
+});

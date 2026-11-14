@@ -1,6 +1,6 @@
 import type { Task } from '@ai-todo/core';
-import { dateTone, formatScheduled, formatTime, t } from '@ai-todo/shared';
-import { ChevronRight, FileText, MoreHorizontal, Repeat, Sparkles } from 'lucide-react';
+import { dateTone, deadlineTone, formatDeadline, formatScheduled, formatTime, t } from '@ai-todo/shared';
+import { ChevronRight, FileText, Hourglass, MoreHorizontal, Repeat, Sparkles } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { editTask, toggleComplete } from '../state/actions';
 import { useQuery } from '../state/replica';
@@ -212,8 +212,16 @@ function Meta({
   const hasDate = showDate && task.scheduled;
   const timeOnly = !showDate && task.scheduled?.time;
   const hasAny =
-    hasDate || timeOnly || project || labels.length || childCount?.total || task.notes || task.recurrence;
+    hasDate ||
+    timeOnly ||
+    task.deadline ||
+    project ||
+    labels.length ||
+    childCount?.total ||
+    task.notes ||
+    task.recurrence;
   if (!hasAny) return null;
+  const due = task.deadline ? deadlineTone(task.deadline, today) : null;
   return (
     <div className="mt-[3px] flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12px] leading-4 text-ink-3">
       {hasDate && task.scheduled && (
@@ -236,6 +244,18 @@ function Meta({
         </span>
       )}
       {!hasDate && !timeOnly && task.recurrence && <Repeat className="size-3" />}
+      {task.deadline && (
+        <span
+          className={cx(
+            'inline-flex items-center gap-1 font-medium',
+            (due === 'overdue' || due === 'today') && 'text-p1',
+            due === 'soon' && 'text-p2',
+          )}
+        >
+          <Hourglass className="size-3" aria-hidden />
+          {formatDeadline(task.deadline, today)}
+        </span>
+      )}
       {childCount && childCount.total > 0 && (
         <span className="inline-flex items-center gap-1 tabular-nums">
           <Progress done={childCount.done} total={childCount.total} />

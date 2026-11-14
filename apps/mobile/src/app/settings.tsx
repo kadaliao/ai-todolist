@@ -157,6 +157,16 @@ export default function SettingsScreen() {
                 trackColor={{ true: c.jade }}
               />
             </Row>
+            <Row label={t('brief.setting')}>
+              <Switch
+                value={notify.briefs}
+                onValueChange={(v) => setNotifySettings({ briefs: v })}
+                trackColor={{ true: c.jade }}
+              />
+            </Row>
+            <Txt variant="meta" style={styles.help}>
+              {t('brief.settingHelp')}
+            </Txt>
           </>
         ) : notify.permission === 'denied' ? (
           <Row label={zh ? '通知已被关闭' : 'Notifications are off'}>
@@ -217,6 +227,12 @@ export default function SettingsScreen() {
         <Txt variant="meta" style={styles.help}>
           {t('agent.words.help')}
         </Txt>
+        <Pressable onPress={() => router.push('/memory')} accessibilityRole="button">
+          <View style={[styles.row, { backgroundColor: c.surface, borderColor: c.line }]}>
+            <Txt style={{ flex: 1 }}>{`${t('agent.memory')} · ${t('dayParts.title')}`}</Txt>
+            <Txt tone={c.ink3}>›</Txt>
+          </View>
+        </Pressable>
         <Pressable onPress={() => router.push('/voice-log')} accessibilityRole="button">
           <View style={[styles.row, { backgroundColor: c.surface, borderColor: c.line }]}>
             <Txt style={{ flex: 1 }}>{t('voiceLog.title')}</Txt>

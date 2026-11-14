@@ -8,6 +8,8 @@ import {
   createProject,
   createTask,
   createTasks,
+  type DayParts,
+  dayParts,
   deleteProject,
   deleteTasks,
   type LocalDate,
@@ -24,6 +26,7 @@ import {
   updateTask,
 } from '@ai-todo/core';
 import { formatDay, t } from '@ai-todo/shared';
+import { timeZone } from './replica';
 import { askRescheduleMode, useUI } from './ui';
 
 /**
@@ -38,6 +41,12 @@ export function bindActions(r: Replica): void {
 
 export function getReplica(): Replica {
   return replica;
+}
+
+/** Clock, time zone and the synced day-part times, for the quick-add parser. */
+export function parseContext(): { now: Date; timeZone: string; dayParts?: DayParts } {
+  const parts = (replica as Replica | undefined) ? dayParts(replica.store) : undefined;
+  return { now: new Date(), timeZone: timeZone(), ...(parts ? { dayParts: parts } : {}) };
 }
 
 const toast = (...args: Parameters<ReturnType<typeof useUI.getState>['toast']>) =>

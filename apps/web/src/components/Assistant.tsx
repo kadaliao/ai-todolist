@@ -309,7 +309,21 @@ function Panel({ offsetRight }: { offsetRight: number }) {
         {!available ? (
           <p className="py-6 text-center text-[13px] text-ink-3">{t('agent.unavailable')}</p>
         ) : state.turns.length === 0 && voice.phase === 'idle' ? (
-          <p className="py-4 text-[13px] leading-relaxed text-ink-3">{t('agent.examples')}</p>
+          <div className="py-4">
+            <p className="text-[13px] leading-relaxed text-ink-3">{t('agent.examples')}</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {SUGGESTIONS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => void getAssistant().say(t(k))}
+                  className="rounded-full border border-line px-3 py-1 text-[12.5px] text-ink-2 hover:bg-hover hover:text-ink"
+                >
+                  {t(k)}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : null}
         <div className="flex flex-col gap-4">
           {state.turns.map((turn, i) => (
@@ -473,7 +487,14 @@ const TOOL_LABEL: Record<string, [string, string]> = {
   'delete-tasks': ['删除', 'deleting'],
   'create-project': ['新建项目', 'creating a project'],
   'undo-last-change': ['撤销', 'undoing'],
+  'review-period': ['回顾', 'looking back'],
+  remember: ['记下', 'remembering'],
+  forget: ['忘掉', 'forgetting'],
+  'set-preferences': ['改设置', 'saving the setting'],
+  'ask-user': ['想问一下', 'asking'],
 };
+
+const SUGGESTIONS = ['agent.suggest.plan', 'agent.suggest.review', 'agent.suggest.overdue'] as const;
 
 function Turn({ turn, last }: { turn: AssistantTurn; last: boolean }) {
   const today = useToday();
@@ -492,6 +513,20 @@ function Turn({ turn, last }: { turn: AssistantTurn; last: boolean }) {
         </p>
       )}
       {turn.reply && <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink">{turn.reply}</p>}
+      {last && turn.status === 'answered' && !!turn.options?.length && (
+        <div className="flex flex-wrap gap-1.5">
+          {turn.options.map((o) => (
+            <button
+              key={o}
+              type="button"
+              onClick={() => void getAssistant().say(o)}
+              className="rounded-full border border-jade-line bg-jade-soft px-3 py-1 text-[13px] text-jade hover:brightness-95"
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
       {lines.length > 0 && <Changes turn={turn} lines={lines} last={last} />}
       {turn.answer && (
         <p className="ml-auto max-w-[85%] rounded-[12px] rounded-br-[4px] bg-hover px-3 py-2 text-[14px]">
@@ -541,7 +576,7 @@ function Changes({ turn, lines, last }: { turn: AssistantTurn; lines: ChangeLine
         {lines.map((l) => (
           <li key={l.key} className="flex min-w-0 items-baseline gap-2 text-[13px]">
             <span className={cx('shrink-0 text-[11.5px] font-semibold', BADGE[l.kind])}>
-              {l.entity === 'task' ? t(`change.${l.kind}` as MessageKey) : '+'}
+              {l.entity === 'task' ? t(`change.${l.kind}` as MessageKey) : l.kind === 'deleted' ? '−' : '+'}
             </span>
             <button
               type="button"

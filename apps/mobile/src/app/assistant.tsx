@@ -40,6 +40,11 @@ const TOOL_LABEL: Record<string, [string, string]> = {
   'delete-tasks': ['删除', 'Deleting'],
   'create-project': ['建项目', 'Creating a project'],
   'undo-last-change': ['撤销', 'Undoing'],
+  'review-period': ['回顾', 'Looking back'],
+  remember: ['记下', 'Remembering'],
+  forget: ['忘掉', 'Forgetting'],
+  'set-preferences': ['改设置', 'Saving the setting'],
+  'ask-user': ['想问一下', 'Asking'],
 };
 
 function toolLabel(name: string): string {
@@ -61,16 +66,20 @@ function kindColor(c: Colors, kind: ChangeLine['kind']): string {
   }
 }
 
-/** Example phrases from `agent.examples` (the quoted parts), offered as one-tap prompts. */
+/** Planning prompts, then example phrases from `agent.examples` (the quoted parts), one tap each. */
 function examples(): string[] {
-  return [...t('agent.examples').matchAll(/[“"]([^”"]+)[”"]/g)].map((m) => m[1] as string);
+  return [
+    t('agent.suggest.plan'),
+    t('agent.suggest.review'),
+    ...[...t('agent.examples').matchAll(/[“"]([^”"]+)[”"]/g)].map((m) => m[1] as string),
+  ];
 }
 
 /** Talk to Docket: the conversation, what changed, and the mic. */
 export default function AssistantScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { listen } = useLocalSearchParams<{ listen?: string }>();
+  const { listen, say } = useLocalSearchParams<{ listen?: string; say?: string }>();
   const state = useAssistant();
   const available = useAssistantAvailable();
   const voice = useVoice();
@@ -79,13 +88,14 @@ export default function AssistantScreen() {
 
   useEffect(() => {
     useAssistantFocus.setState({ sheetOpen: true });
-    if (listen) talkHandsFree();
+    if (say) speak(say);
+    else if (listen) talkHandsFree();
     return () => {
       useAssistantFocus.setState({ sheetOpen: false });
       if (useVoice.getState().handsFree) cancelListening();
       clearVoiceError();
     };
-  }, [listen]);
+  }, [listen, say]);
 
   const send = () => {
     const s = text.trim();
@@ -245,6 +255,19 @@ function Turn({ turn, last }: { turn: AssistantTurn; last: boolean }) {
           {turn.reply}
         </Txt>
       ) : null}
+      {last && turn.status === 'answered' && turn.options?.length ? (
+        <View style={styles.options}>
+          {turn.options.map((o) => (
+            <Press key={o} onPress={() => speak(o)} accessibilityRole="button">
+              <View style={[styles.option, { borderColor: c.jade, backgroundColor: c.jadeSoft }]}>
+                <Txt tone={c.jade} style={{ fontSize: 15, fontWeight: '600' }}>
+                  {o}
+                </Txt>
+              </View>
+            </Press>
+          ))}
+        </View>
+      ) : null}
       {turn.status === 'thinking' ? (
         <View style={styles.thinking}>
           <ActivityIndicator size="small" color={c.jade} />
@@ -283,13 +306,20 @@ function Turn({ turn, last }: { turn: AssistantTurn; last: boolean }) {
 function Line({ line, struck }: { line: ChangeLine; struck: boolean }) {
   const c = useColors();
   const tone = kindColor(c, line.kind);
-  const badge = line.entity === 'task' ? t(`change.${line.kind}` as 'change.added') : line.detail;
+  // Settings say what changed underneath; other non-task lines put it in the badge (“记住了”).
+  const sub = line.entity === 'task' || line.entity === 'setting';
+  const badge =
+    line.entity === 'task'
+      ? t(`change.${line.kind}` as 'change.added')
+      : line.entity === 'setting'
+        ? t('change.updated')
+        : line.detail;
   return (
     <Pressable
       disabled={!line.taskId || line.kind === 'deleted' || struck}
       onPress={() => line.taskId && router.push(`/task/${line.taskId}`)}
       style={styles.line}
-      accessibilityLabel={`${badge} ${line.title} ${line.entity === 'task' ? line.detail : ''}`}
+      accessibilityLabel={`${badge} ${line.title} ${sub ? line.detail : ''}`}
     >
       <View style={[styles.badge, { backgroundColor: `${tone}1F` }]}>
         <Txt style={{ fontSize: 12, fontWeight: '700', color: tone }}>{badge}</Txt>
@@ -305,7 +335,7 @@ function Line({ line, struck }: { line: ChangeLine; struck: boolean }) {
         >
           {line.title}
         </Txt>
-        {line.entity === 'task' && line.detail ? (
+        {sub && line.detail ? (
           <Txt variant="meta" style={{ marginTop: 1 }} numberOfLines={2}>
             {line.detail}
           </Txt>
@@ -427,6 +457,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 4 },
+  option: {
+    paddingHorizontal: 14,
+    minHeight: 40,
+    justifyContent: 'center',
+    borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
   },
   heard: {

@@ -153,6 +153,9 @@ button {
 .qa-mirror mark[data-kind="label"] {
   --mark-bg: color-mix(in srgb, var(--p2) 18%, transparent);
 }
+.qa-mirror mark[data-kind="deadline"] {
+  --mark-bg: color-mix(in srgb, var(--p1) 12%, transparent);
+}
 .qa-mirror mark[data-kind="priority"] {
   --mark-bg: color-mix(in srgb, var(--p1) 15%, transparent);
 }

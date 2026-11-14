@@ -8,6 +8,8 @@ import {
   createProject,
   createTask,
   createTasks,
+  type DayParts,
+  dayParts,
   deleteTasks,
   type LocalDate,
   type MoveTarget,
@@ -26,6 +28,7 @@ import { formatDay, t } from '@ai-todo/shared';
 import * as Haptics from 'expo-haptics';
 import { Alert } from 'react-native';
 import { create } from 'zustand';
+import { timeZone } from './replica';
 
 /** UI actions with haptics, toasts and undo — the phone counterpart of the web's actions. */
 
@@ -40,6 +43,12 @@ export function hasReplica(): boolean {
 
 export function getReplica(): Replica {
   return replica;
+}
+
+/** Clock, time zone and the synced day-part times, for the quick-add parser. */
+export function parseContext(): { now: Date; timeZone: string; dayParts?: DayParts } {
+  const parts = (replica as Replica | undefined) ? dayParts(replica.store) : undefined;
+  return { now: new Date(), timeZone: timeZone(), ...(parts ? { dayParts: parts } : {}) };
 }
 
 export interface Toast {
@@ -101,7 +110,7 @@ export function addFromText(text: string, extra: Partial<NewTask> = {}): string 
   const s = replica.store;
   const live = <T extends { deletedAt: string | null }>(xs: T[]) => xs.filter((x) => !x.deletedAt);
   const parsed = parseQuickAdd(text, {
-    now: new Date(),
+    ...parseContext(),
     timeZone: replica.timeZone,
     projects: live(s.all('project')).map((p) => ({ id: p.id, name: p.name })),
     sections: live(s.all('section')).map((x) => ({ id: x.id, name: x.name, projectId: x.projectId })),

@@ -1,5 +1,5 @@
-import { type DueReminder, dueReminders, type Replica } from '@ai-todo/core';
-import { formatTime, getLocale } from '@ai-todo/shared';
+import { type DueReminder, dayParts, dueReminders, type Replica } from '@ai-todo/core';
+import { type Brief, formatTime, getLocale, t, upcomingBriefs } from '@ai-todo/shared';
 import { create } from 'zustand';
 import { timeZone } from './replica';
 import { useUI } from './ui';
@@ -11,6 +11,8 @@ import { useUI } from './ui';
  *
  * Tasks with a time but no explicit reminder notify at that time unless the user turned the
  * default off. The phone app schedules OS-level notifications instead (works while closed).
+ *
+ * The morning plan and the Sunday look back (see `shared/brief.ts`) ride on the same timer.
  */
 
 export interface Notifier {
@@ -46,19 +48,24 @@ interface ReminderSettings {
   enabled: boolean;
   /** Notify at the task's time when it has no explicit reminder. */
   atTimeByDefault: boolean;
+  /** Morning plan and Sunday look back. */
+  briefs: boolean;
   permission: 'granted' | 'denied' | 'default';
 }
 
 export const useReminderSettings = create<ReminderSettings>(() => ({
   enabled: localStorage.getItem('docket.reminders') !== 'off',
   atTimeByDefault: localStorage.getItem('docket.reminders.default') !== 'off',
+  briefs: localStorage.getItem('docket.reminders.briefs') !== 'off',
   permission: 'default',
 }));
 
 export function setReminderSettings(
-  patch: Partial<Pick<ReminderSettings, 'enabled' | 'atTimeByDefault'>>,
+  patch: Partial<Pick<ReminderSettings, 'enabled' | 'atTimeByDefault' | 'briefs'>>,
 ): void {
   useReminderSettings.setState(patch);
+  if (patch.briefs !== undefined)
+    localStorage.setItem('docket.reminders.briefs', patch.briefs ? 'on' : 'off');
   if (patch.enabled !== undefined) localStorage.setItem('docket.reminders', patch.enabled ? 'on' : 'off');
   if (patch.atTimeByDefault !== undefined)
     localStorage.setItem('docket.reminders.default', patch.atTimeByDefault ? 'on' : 'off');
@@ -113,6 +120,20 @@ export function startReminders(replica: Replica): () => void {
     }
   };
 
+  const briefKey = (b: Brief) => `brief:${b.kind}:${b.at}`;
+  const fireBrief = (b: Brief) => {
+    fired[briefKey(b)] = b.at;
+    localStorage.setItem(FIRED_KEY, JSON.stringify(fired));
+    try {
+      notifier.show(b.title, b.body, () => {
+        if (b.kind === 'plan') useUI.getState().navigate({ kind: 'today' });
+        else void import('./assistant').then((m) => m.openAssistantWith(t('agent.suggest.review')));
+      });
+    } catch (e) {
+      console.warn('notification failed', e);
+    }
+  };
+
   const plan = () => {
     clearTimeout(timer);
     const s = useReminderSettings.getState();
@@ -122,10 +143,23 @@ export function startReminders(replica: Replica): () => void {
       (d) => !fired[d.key],
     );
     for (const d of due) if (d.at <= now && d.at > now - GRACE_MS) fire(d);
-    const next = due.find((d) => d.at > now);
-    if (!next) return;
+    // Planned from a little earlier so a plan missed by a few minutes (laptop asleep) still shows.
+    const briefs = s.briefs
+      ? upcomingBriefs(replica.store, {
+          now: now - GRACE_MS,
+          timeZone: timeZone(),
+          ...dayParts(replica.store),
+          days: 2,
+        }).filter((b) => !fired[briefKey(b)])
+      : [];
+    for (const b of briefs) if (b.at <= now) fireBrief(b);
+    const next = Math.min(
+      due.find((d) => d.at > now)?.at ?? Number.POSITIVE_INFINITY,
+      briefs.find((b) => b.at > now)?.at ?? Number.POSITIVE_INFINITY,
+    );
+    if (!Number.isFinite(next)) return;
     // Re-check at least hourly (sleep/wake, time zone changes).
-    timer = setTimeout(plan, Math.min(next.at - now, 3_600_000) + 50);
+    timer = setTimeout(plan, Math.min(next - now, 3_600_000) + 50);
   };
 
   replan = plan;

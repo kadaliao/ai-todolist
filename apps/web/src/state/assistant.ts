@@ -92,6 +92,12 @@ export function speak(text: string, capture?: VoiceCapture): Promise<void> {
     .finally(() => journal?.unused());
 }
 
+/** Open the assistant panel and say something on the user's behalf (a notification's tap). */
+export function openAssistantWith(text: string): void {
+  useUI.getState().set({ assistantOpen: true });
+  void speak(text);
+}
+
 /** The user's vocabulary, project and label names, to help speech recognition. */
 export function vocabulary(): string[] {
   const s = getReplica().store;

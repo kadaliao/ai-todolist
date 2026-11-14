@@ -2,7 +2,7 @@ import type { NewTask } from '../commands';
 import { type DayParts, DEFAULT_DAY_PARTS, type Priority, type RepeatFrom, type Scheduled } from '../model';
 import { occurrenceAfter } from '../recurrence';
 import { addDays, type LocalDate, wallClock } from '../time';
-import { matchDate } from './dates';
+import { type DateMatch, matchDate } from './dates';
 import { DEFAULT_SYNTAX, type Named, type PrefixSyntax, scanPrefixTokens } from './prefix';
 import { matchRecurrence } from './recurrence';
 
@@ -112,31 +112,46 @@ export function parseQuickAdd(input: string, opts: QuickAddOptions): QuickAddRes
     text = mask(text, [{ start: rec.start, end }]);
   }
 
-  const date = matchDate(text, chronoRef(opts.now, opts.timeZone), ignore);
-  let deadline = false;
-  if (date) {
-    // Absorb connector words so they don't litter the title: 从下周开始 / 周五之前 / by Friday.
-    const head = text.slice(0, date.start);
-    const tail = text.slice(date.end);
-    const due = DEADLINE_BEFORE.exec(head);
-    const dueAfter = DEADLINE_AFTER.exec(tail);
-    const before = due ?? /(?:从|在|于|\b(?:on|at|starting|from|until)\s+)$/i.exec(head);
-    const after = dueAfter ?? /^(?:开始|以内|左右)/.exec(tail);
-    // A recurring task has no single deadline: “每周五之前” stays a plain series.
-    deadline = !rec && !!(due || dueAfter);
-    const start = date.start - (before?.[0].length ?? 0);
-    const end = date.end + (after?.[0].length ?? 0);
-    tokens.push({ kind: deadline ? 'deadline' : 'date', start, end, text: input.slice(start, end) });
-    // “明天早上”, “今晚”: no clock time, but the day part names one.
-    if (!date.time && !deadline) {
-      const part = dayPart(date.text);
-      if (part) {
-        date.time = (opts.dayParts ?? DEFAULT_DAY_PARTS)[part];
-        // “晚上 看书” typed at 22:00 means tomorrow evening (but 今晚 is still tonight).
-        const namesDay = namesADay(date.text) || /今|today|tonight/i.test(date.text);
-        if (!namesDay && date.date === wall.date && date.time <= wall.time) {
-          date.date = addDays(wall.date, 1);
-        }
+  // Up to two date phrases: a planned day and a deadline (“今天写方案 下周三截止”).
+  const ref = chronoRef(opts.now, opts.timeZone);
+  let date: DateMatch | null = null;
+  let due: DateMatch | null = null;
+  const first = matchDate(text, ref, ignore);
+  if (first) {
+    const a = connectors(text, first, !!rec);
+    tokens.push({
+      kind: a.deadline ? 'deadline' : 'date',
+      start: a.start,
+      end: a.end,
+      text: input.slice(a.start, a.end),
+    });
+    if (a.deadline) due = first;
+    else date = first;
+    const rest = mask(text, [a]);
+    const second = matchDate(rest, ref, ignore);
+    if (second) {
+      const b = connectors(rest, second, !!rec);
+      if (b.deadline !== a.deadline) {
+        tokens.push({
+          kind: b.deadline ? 'deadline' : 'date',
+          start: b.start,
+          end: b.end,
+          text: input.slice(b.start, b.end),
+        });
+        if (b.deadline) due = second;
+        else date = second;
+      }
+    }
+  }
+  // “明天早上”, “今晚”: no clock time, but the day part names one.
+  if (date && !date.time) {
+    const part = dayPart(date.text);
+    if (part) {
+      date.time = (opts.dayParts ?? DEFAULT_DAY_PARTS)[part];
+      // “晚上 看书” typed at 22:00 means tomorrow evening (but 今晚 is still tonight).
+      const namesDay = namesADay(date.text) || /今|today|tonight/i.test(date.text);
+      if (!namesDay && date.date === wall.date && date.time <= wall.time) {
+        date.date = addDays(wall.date, 1);
       }
     }
   }
@@ -162,8 +177,6 @@ export function parseQuickAdd(input: string, opts: QuickAddOptions): QuickAddRes
     } else {
       delete result.recurrence;
     }
-  } else if (date && deadline) {
-    result.deadline = date.date;
   } else if (date) {
     result.scheduled = {
       date: date.date,
@@ -171,6 +184,8 @@ export function parseQuickAdd(input: string, opts: QuickAddOptions): QuickAddRes
       ...(date.duration ? { duration: date.duration } : {}),
     };
   }
+
+  if (due) result.deadline = due.date;
 
   tokens.sort((a, b) => a.start - b.start);
   let title = '';
@@ -182,6 +197,29 @@ export function parseQuickAdd(input: string, opts: QuickAddOptions): QuickAddRes
   title += input.slice(pos);
   result.title = title.replace(/\s+/g, ' ').trim();
   return result;
+}
+
+/**
+ * The range a date phrase covers once its connector words are absorbed (从下周开始, 周五之前,
+ * by Friday), and whether those words make it a deadline. A series has no single deadline:
+ * “每周五之前” stays a plain recurrence.
+ */
+function connectors(
+  text: string,
+  m: DateMatch,
+  recurring: boolean,
+): { start: number; end: number; deadline: boolean } {
+  const head = text.slice(0, m.start);
+  const tail = text.slice(m.end);
+  const due = DEADLINE_BEFORE.exec(head);
+  const dueAfter = DEADLINE_AFTER.exec(tail);
+  const before = due ?? /(?:从|在|于|\b(?:on|at|starting|from|until)\s+)$/i.exec(head);
+  const after = dueAfter ?? /^(?:开始|以内|左右)/.exec(tail);
+  return {
+    start: m.start - (before?.[0].length ?? 0),
+    end: m.end + (after?.[0].length ?? 0),
+    deadline: !recurring && !!(due || dueAfter),
+  };
 }
 
 /** Words before a date that make it a deadline: 截止周五, 最晚下周一, by Friday, due Mon. */

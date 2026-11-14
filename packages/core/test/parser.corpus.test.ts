@@ -127,6 +127,9 @@ const cases: Case[] = [
   { in: 'Pay rent by friday', title: 'Pay rent', deadline: '2026-11-13' },
   { in: 'Report due next fri', title: 'Report', deadline: '2026-11-20' },
   { in: '每周五之前交周报', title: '交周报', date: '2026-11-13', rule: 'FREQ=WEEKLY;BYDAY=FR' },
+  { in: '今天写方案 下周三截止', title: '写方案', date: '2026-11-13', deadline: '2026-11-18' },
+  { in: '周五之前交报告 明天开始写', title: '交报告 写', date: '2026-11-14', deadline: '2026-11-13' },
+  { in: '明天 和 后天 都要去', title: '和 后天 都要去', date: '2026-11-14' },
   { in: '下周一开始健身', title: '健身', date: '2026-11-16' },
 
   // --- 只说了早上 / 晚上：按时段的默认时间

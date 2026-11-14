@@ -6,19 +6,24 @@ import { type ReactNode, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Txt } from '../components/ui';
-import { schedule } from '../state/actions';
+import { editTask, schedule } from '../state/actions';
 import { useQuery, useToday } from '../state/replica';
 import { useColors } from '../theme';
 
 export default function ScheduleSheet() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { ids: idParam } = useLocalSearchParams<{ ids: string }>();
+  // `field=deadline` picks the deadline of one task instead of the planned day.
+  const { ids: idParam, field } = useLocalSearchParams<{ ids: string; field?: string }>();
   const ids = (idParam ?? '').split(',').filter(Boolean);
+  const deadline = field === 'deadline';
   const today = useToday();
   const current = useQuery(
-    (s) => (ids[0] ? s.get('task', ids[0])?.scheduled?.date : undefined) ?? null,
-    [idParam],
+    (s) => {
+      const task = ids[0] ? s.get('task', ids[0]) : undefined;
+      return (deadline ? task?.deadline : task?.scheduled?.date) ?? null;
+    },
+    [idParam, deadline],
   );
   const [cursor, setCursor] = useState(() => {
     const [y, m] = (current ?? today).split('-').map(Number) as [number, number];
@@ -26,7 +31,10 @@ export default function ScheduleSheet() {
   });
   const pick = (d: string | null) => {
     router.back();
-    setTimeout(() => void schedule(ids, d), 250);
+    setTimeout(() => {
+      if (deadline) for (const id of ids) editTask(id, { deadline: d });
+      else void schedule(ids, d);
+    }, 250);
   };
   const weekend = addDays(today, Math.max(0, 6 - isoWeekday(today)));
   const nextWeek = addDays(today, 8 - isoWeekday(today));
@@ -62,7 +70,11 @@ export default function ScheduleSheet() {
         onPress={() => pick(nextWeek)}
       />
       {current ? (
-        <Option icon={<X size={20} color={c.ink3} />} label={t('date.none')} onPress={() => pick(null)} />
+        <Option
+          icon={<X size={20} color={c.ink3} />}
+          label={t(deadline ? 'deadline.clear' : 'date.none')}
+          onPress={() => pick(null)}
+        />
       ) : null}
       <View style={[styles.cal, { borderTopColor: c.line }]}>
         <View style={styles.calHead}>

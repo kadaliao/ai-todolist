@@ -83,3 +83,15 @@ test('recurring task asks before moving the series', async ({ page }) => {
   await page.getByRole('button', { name: '只改这一次' }).click();
   await expect(page.getByText(/已改到/)).toBeVisible();
 });
+
+test('“之前” sets a deadline, shown on the row and in the detail pane', async ({ page }) => {
+  await page.goto('/#/inbox');
+  const qa = page.getByLabel('添加任务');
+  await qa.fill('下周三之前提交报销');
+  await expect(page.locator('.qa-mirror mark[data-kind="deadline"]')).toHaveText('下周三之前');
+  await qa.press('Enter');
+  const r = page.locator('[data-task-row]').filter({ hasText: '提交报销' });
+  await expect(r).toContainText('截止');
+  await r.click();
+  await expect(page.getByText('截止日期')).toBeVisible();
+});
