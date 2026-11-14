@@ -97,6 +97,11 @@ test('talk to the list: add, confirm a delete, undo', async ({ page }) => {
   await page.keyboard.press('Escape');
   await page.goto('/#/upcoming');
   await expect(row(page, '给张三打电话')).toContainText('09:00');
+
+  // Both turns are in the voice log; the delete was undone.
+  await page.getByRole('button', { name: '设置' }).click();
+  await expect(page.getByText('2 条')).toBeVisible();
+  await expect(page.getByText('被撤销 1/2（50%）')).toBeVisible();
 });
 
 test('model errors are shown with a retry', async ({ page }) => {

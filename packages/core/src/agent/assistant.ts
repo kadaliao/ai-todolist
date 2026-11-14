@@ -56,6 +56,8 @@ export interface AgentContext {
   focus?: TaskBrief & { subtasks?: TaskBrief[] };
   /** What list is on screen, e.g. "project 工作". */
   view?: string;
+  /** Names and words the user often says (their vocabulary setting), spelled the way they want. */
+  words?: string[];
 }
 
 export interface AgentRequest {
@@ -109,6 +111,7 @@ export function agentContext(
     refs: TaskRefs;
     focusTaskId?: string | null;
     view?: string;
+    words?: string[];
   },
 ): AgentContext {
   const b = (t: Parameters<typeof briefTask>[1]) => briefTask(store, t, (id) => opts.refs.ref(id));
@@ -140,6 +143,7 @@ export function agentContext(
       ? { focus: { ...b(focus), subtasks: subtasks(store, focus.id, false).slice(0, 30).map(b) } }
       : {}),
     ...(opts.view ? { view: opts.view } : {}),
+    ...(opts.words?.length ? { words: opts.words.slice(0, 100) } : {}),
   };
 }
 
@@ -159,6 +163,13 @@ export interface AssistantTurn {
   error?: string;
   /** What the user said to confirm or cancel this turn's proposal (“好”, “算了”). */
   answer?: string;
+  /** When the turn started (the clock given to the assistant), and how it went from there. */
+  startedAt: number;
+  /** Model calls made. */
+  steps: number;
+  /** Milliseconds from the start until the first change was staged (shown), and until the end. */
+  firstChangeMs?: number;
+  doneMs?: number;
 }
 
 export interface AssistantState {
@@ -172,6 +183,8 @@ export interface AssistantOptions {
   locale: () => string;
   /** What is on screen. */
   focus?: () => { taskId?: string | null; view?: string };
+  /** The user's vocabulary: names and terms recognition tends to get wrong. */
+  words?: () => string[];
   maxSteps?: number;
   /** The conversation is forgotten after this much quiet (default 10 minutes). */
   idleMs?: number;
@@ -259,6 +272,8 @@ export class Assistant {
       changes: [],
       status: 'thinking',
       tx: null,
+      startedAt: this.now(),
+      steps: 0,
     };
     this.turns.push(turn);
     if (this.turns.length > MAX_TURNS_SHOWN) this.turns.shift();
@@ -293,6 +308,7 @@ export class Assistant {
       const at = lastUserIndex(this.transcript);
       if (at >= 0) this.transcript.splice(at);
     } finally {
+      if (!ctl.signal.aborted) turn.doneMs = this.now() - turn.startedAt;
       if (this.ctl === ctl) this.ctl = null;
       this.emit(false);
     }
@@ -313,6 +329,7 @@ export class Assistant {
         context,
         tools: allowed.map((t) => t.name),
       };
+      turn.steps++;
       for await (const ev of this.opts.transport(req, signal)) {
         if (signal.aborted) return;
         if (ev.type === 'text') {
@@ -325,13 +342,20 @@ export class Assistant {
       if (signal.aborted) return;
       this.transcript.push({ role: 'assistant', text, ...(calls.length ? { calls } : {}) });
       if (!calls.length) return;
+      let wrote = false;
+      let failed = false;
+      let replied = '';
       const results: ToolResult[] = calls.map((call) => {
         turn.tools.push(call.name);
+        const said = (call.input as { reply?: unknown } | null)?.reply;
+        if (typeof said === 'string' && said.trim()) replied = said.trim();
         const point = this.session.checkpoint();
         const r = executeTool(this.env(), call.name, call.input, allowed);
         if (r.error) this.session.rollback(point);
         let output = r.output;
         const tool = allowed.find((t) => t.name === call.name);
+        if (tool && !tool.readOnly) wrote = true;
+        if (r.error) failed = true;
         if (!r.error && tool && !tool.readOnly && this.session.needsConfirmation()) {
           output = {
             ...(output as object),
@@ -343,7 +367,21 @@ export class Assistant {
       });
       this.transcript.push({ role: 'tool', results });
       turn.changes = this.session.changes();
+      if (turn.changes.length && turn.firstChangeMs === undefined)
+        turn.firstChangeMs = this.now() - turn.startedAt;
       this.emit(true);
+      if (wrote && (text.trim() || replied)) {
+        // The model replied alongside its edits, as text or as a write call's `reply` argument.
+        // If they all worked and nothing waits for a yes, the turn is done: no second round trip
+        // just to hear the same sentence again.
+        if (!failed && !this.session.needsConfirmation()) {
+          if (!text.trim()) turn.reply = before ? `${before}\n${replied}` : replied;
+          this.emit(true);
+          return;
+        }
+        // Otherwise that reply came too early (“done!” before an error); the next step's replaces it.
+        turn.reply = before;
+      }
     }
   }
 
@@ -383,6 +421,7 @@ export class Assistant {
       refs: this.refs,
       focusTaskId: focus.taskId ?? null,
       ...(focus.view ? { view: focus.view } : {}),
+      words: this.opts.words?.() ?? [],
     });
   }
 

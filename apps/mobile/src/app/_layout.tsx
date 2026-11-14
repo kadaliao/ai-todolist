@@ -181,6 +181,7 @@ export default function RootLayout() {
             options={{ presentation: 'modal', headerShown: false, animation: 'none' }}
           />
           <Stack.Screen name="settings" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="voice-log" options={{ presentation: 'modal', headerShown: false }} />
           <Stack.Screen name="search" options={{ headerShown: false, animation: 'fade' }} />
         </Stack>
         <Toasts />

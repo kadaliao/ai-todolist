@@ -10,7 +10,7 @@ import {
   type Task,
   todayIn,
 } from '@ai-todo/core';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { Ai } from '../src/ai';
 import { loadConfig } from '../src/config';
 
@@ -28,11 +28,46 @@ const tz = 'Asia/Shanghai';
 const today = todayIn(new Date(), tz);
 const next = (iso: number) => addDays(today, (iso - isoWeekday(today) + 7) % 7 || 7);
 
+/** Per case: each model step's time to first event and total, in ms. */
+const timings = new Map<string, { first: number; total: number; calls: number }[]>();
+
+/** Wraps a transport to time each model step under the running test's name. */
+function timed(transport: AgentTransport): AgentTransport {
+  return async function* (req, signal) {
+    const name = expect.getState().currentTestName ?? '?';
+    const start = performance.now();
+    let first = 0;
+    let calls = 0;
+    for await (const ev of transport(req, signal)) {
+      if (!first) first = performance.now() - start;
+      if (ev.type === 'call') calls++;
+      yield ev;
+    }
+    const steps = timings.get(name) ?? [];
+    steps.push({ first: Math.round(first), total: Math.round(performance.now() - start), calls });
+    timings.set(name, steps);
+  };
+}
+
+afterAll(() => {
+  if (!timings.size) return;
+  const rows = [...timings].map(([name, steps]) => ({
+    case: name.replace(/^.*?\) /, '').slice(0, 42),
+    steps: steps.length,
+    'first ms': steps.map((s) => s.first).join(' / '),
+    'step ms': steps.map((s) => s.total).join(' / '),
+    'total ms': steps.reduce((n, s) => n + s.total, 0),
+  }));
+  const totals = rows.map((r) => r['total ms']).sort((a, b) => a - b);
+  console.log(`model ${config.ai?.model}`);
+  console.table(rows);
+  console.log(`median ${totals[Math.floor(totals.length / 2)]} ms, max ${totals.at(-1)} ms`);
+});
+
 function setup() {
   const ai = new Ai(config.ai as NonNullable<typeof config.ai>);
   const r = new Replica({ deviceId: 'eval', timeZone: tz });
-  const transport: AgentTransport = (req, signal) =>
-    ai.agentStep(req.messages, req.context, req.tools, signal);
+  const transport = timed((req, signal) => ai.agentStep(req.messages, req.context, req.tools, signal));
   const a = new Assistant({ replica: r, transport, locale: () => 'zh-CN' });
   const open = () => r.store.all('task').filter((t) => !t.deletedAt && !t.completedAt);
   const byTitle = (re: RegExp) => r.store.all('task').find((t) => !t.deletedAt && re.test(t.title)) as Task;
@@ -124,6 +159,33 @@ live('voice assistant (live model)', { timeout: 90_000 }, () => {
     );
   });
 
+  it('adds a task and its steps in one go (needs the new task’s id)', async () => {
+    const { r, a, last } = setup();
+    await a.say('加一个准备年会的任务 帮我拆成三步');
+    expect(last()?.status).toBe('applied');
+    const parent = r.store.all('task').find((t) => !t.parentId && /年会/.test(t.title));
+    expect(parent).toBeTruthy();
+    const subs = r.store.all('task').filter((t) => t.parentId === parent?.id);
+    expect(subs.length).toBeGreaterThanOrEqual(2);
+    console.log(
+      '  →',
+      last()?.reply,
+      subs.map((t) => t.title),
+    );
+  });
+
+  it('creates a project when asked and fills it', async () => {
+    const { r, a, open, last } = setup();
+    await a.say('新建一个装修项目 把买油漆和找师傅放进去');
+    expect(last()?.status).toBe('applied');
+    const project = r.store.all('project').find((p) => /装修/.test(p.name));
+    expect(project).toBeTruthy();
+    const inIt = open().filter((t) => t.projectId === project?.id);
+    expect(inIt.map((t) => t.title).join()).toMatch(/油漆/);
+    expect(inIt.map((t) => t.title).join()).toMatch(/师傅/);
+    console.log('  →', last()?.reply);
+  });
+
   it('follows up on the previous turn', async () => {
     const { a, open, last } = setup();
     await a.say('加一个买菜');
@@ -152,13 +214,14 @@ live('voice assistant (live model)', { timeout: 90_000 }, () => {
     const focus = id[1] as string;
     const b = new Assistant({
       replica: r,
-      transport: (req, signal) =>
+      transport: timed((req, signal) =>
         new Ai(config.ai as NonNullable<typeof config.ai>).agentStep(
           req.messages,
           req.context,
           req.tools,
           signal,
         ),
+      ),
       locale: () => 'zh-CN',
       focus: () => ({ taskId: focus }),
     });

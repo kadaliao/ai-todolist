@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { getReplica } from '../state/actions';
-import { getAssistant, useAssistant, vocabulary } from '../state/assistant';
+import { getAssistant, speak, useAssistant, vocabulary } from '../state/assistant';
 import { useToday } from '../state/replica';
 import { useSyncStore } from '../state/sync';
 import { useUI } from '../state/ui';
@@ -70,7 +70,7 @@ async function startVoice(handsFree: boolean): Promise<void> {
         session = null;
         useVoice.setState({ phase: 'idle', level: 0, partial: '', cancelArmed: false });
         if ('error' in r) useVoice.setState({ error: r.error });
-        else if (r.text.trim()) void getAssistant().say(r.text);
+        else if (r.text.trim()) void speak(r.text, r.capture);
         else if (!userCancelled) useVoice.setState({ error: t('agent.noSpeech') });
       },
     });

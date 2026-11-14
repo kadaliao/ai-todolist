@@ -26,10 +26,6 @@
       "{lang}-widgets.png",
       "{lang}-dark.png"
     ],
-    "APP_IPAD_PRO_3GEN_129": [
-      "ipad-{lang}-today.png",
-      "ipad-{lang}-upcoming.png",
-      "ipad-{lang}-dark.png"
-    ]
+    "APP_IPAD_PRO_3GEN_129": ["ipad-{lang}-today.png", "ipad-{lang}-upcoming.png", "ipad-{lang}-dark.png"]
   }
 }

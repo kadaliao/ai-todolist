@@ -198,8 +198,10 @@ export class Ai {
   ): AsyncGenerator<ModelEvent> {
     const tools: ToolSet = {};
     for (const t of AGENT_TOOLS) {
-      if (toolNames.includes(t.name))
-        tools[t.name] = tool({ description: t.description, inputSchema: t.schema });
+      if (!toolNames.includes(t.name)) continue;
+      // Write tools carry the closing sentence, so a finished request takes one model call, not two.
+      const inputSchema = t.readOnly ? t.schema : t.schema.extend({ reply: REPLY });
+      tools[t.name] = tool({ description: t.description, inputSchema });
     }
     let failure: unknown = null;
     const result = streamText({
@@ -223,6 +225,13 @@ export class Ai {
     if (failure) throw failure;
   }
 }
+
+const REPLY = z
+  .string()
+  .optional()
+  .describe(
+    'Set it when this call finishes the user’s request: your one short spoken-style reply (what you did), in the user’s language. The app then ends the turn without asking you again. Leave it out when you still need this call’s result to finish (e.g. the ids of tasks you are creating).',
+  );
 
 function toModelMessages(messages: AgentMessage[]): ModelMessage[] {
   return messages.map((m): ModelMessage => {
@@ -264,6 +273,7 @@ export function agentPrompt(ctx: AgentContext): string {
     'How to work:',
     '- Do what was asked with the tools; don’t just describe it. A request may need several changes: make all the calls.',
     '- The input is a speech transcript and may contain recognition errors (homophones, wrong characters, no punctuation). Match tasks, projects and labels by meaning and sound (“粥报” → “周报”). If one task clearly matches, act on it; ask only when several plausibly match or none does.',
+    '- `words` (when present) are names and terms the user says often, spelled the way they want: when the transcript has something that sounds like one, write it that way in titles too.',
     '- The lists below show overdue, today’s, the next 7 days’ and undated Inbox tasks with their ids (t1, t2…). Use those ids. For anything else call find-tasks first, with a short keyword.',
     '- “这个 / this / it” means the focused task, when there is one.',
     '- New things to do → add-tasks, one call for all of them. Copy the date/time wording into `when` (“明天下午三点”, “下周五”, “每周一”); never compute dates yourself. Tasks with a time remind at that time automatically.',
@@ -274,7 +284,8 @@ export function agentPrompt(ctx: AgentContext): string {
     '- Never add tasks the user didn’t ask for. Don’t create projects or labels unless asked.',
     '- The app’s words: Inbox = 收件箱, trash = 回收站, project = 项目, label = 标签, subtask = 子任务.',
     '',
-    'Reply after the tools in the user’s language, in one short spoken-style sentence: what you did, or the answer. It may be read aloud, so no markdown, lists, ids or dates in YYYY-MM-DD; the app shows the details. If you must ask, ask one short question.',
+    'Reply in the user’s language, in one short spoken-style sentence: what you did, or the answer. It may be read aloud, so no markdown, lists, ids or dates in YYYY-MM-DD; the app shows the details. If you must ask, ask one short question.',
+    '- Speed matters: the user is waiting. When the calls you are making finish the request, put that reply in the `reply` argument of the (last) write call; the app ends the turn as soon as the calls succeed, and asks you again only if one fails or needs the user’s confirmation. If you need a call’s result before you can finish (search results, ids of tasks you are creating), leave `reply` out and answer after.',
     '',
     `Now: ${today} (${wd.en}, ${wd.zh}) ${now}, time zone ${timeZone}, locale ${locale}.`,
     `The user’s list when they spoke (tool results show what changed since): ${JSON.stringify(lists)}`,

@@ -1,3 +1,4 @@
+import type { VoiceCapture } from '@ai-todo/core';
 import { getLocale, t } from '@ai-todo/shared';
 import { File } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
@@ -10,6 +11,7 @@ import { Platform } from 'react-native';
 import { makeMutable, withTiming } from 'react-native-reanimated';
 import { create } from 'zustand';
 import { getReplica } from './actions';
+import { journalEnabled, keepAudio } from './journal';
 import { getSetting, setSetting } from './storage';
 import { useSync } from './sync';
 
@@ -34,6 +36,23 @@ export function getSpeechMode(): SpeechMode {
 export function setSpeechMode(mode: SpeechMode): void {
   setSetting('speech.mode', mode);
   useVoice.setState({ mode });
+}
+
+/** Names and words you say often, one per line or comma-separated; they steer both recognizers. */
+export function getVoiceWords(): string[] {
+  const raw = getSetting<string>('speech.words') ?? '';
+  return [
+    ...new Set(
+      raw
+        .split(/[\n,，、;；]+/)
+        .map((w) => w.trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, 100);
+}
+
+export function setVoiceWords(raw: string): void {
+  setSetting('speech.words', raw);
 }
 
 export type VoiceStatus = 'idle' | 'starting' | 'listening' | 'transcribing';
@@ -69,13 +88,27 @@ interface Session {
   uri: string | null;
   cancelled: boolean;
   cloud: boolean;
+  /** Recording to a file: for cloud mode, or for the voice journal. */
+  record: boolean;
   error: string | null;
   resolve: (text: string | null) => void;
   silence: ReturnType<typeof setTimeout> | null;
+  startedAt: number;
+  releasedAt: number | null;
+  handsFree: boolean;
 }
 
 let session: Session | null = null;
 let wired = false;
+/** How the last finished session went, for the voice journal ({@link takeCapture}). */
+let lastCapture: VoiceCapture | null = null;
+
+/** The capture behind the text `listen` just resolved with (once). */
+export function takeCapture(): VoiceCapture | null {
+  const c = lastCapture;
+  lastCapture = null;
+  return c;
+}
 
 const joiner = () => (getLocale() === 'zh' ? '' : ' ');
 const current = (s: Session) =>
@@ -85,6 +118,7 @@ function vocabulary(): string[] {
   try {
     const s = getReplica().store;
     const names = [
+      ...getVoiceWords(),
       ...s
         .all('project')
         .filter((p) => !p.deletedAt && !p.archivedAt)
@@ -103,7 +137,10 @@ function vocabulary(): string[] {
 function armSilence(s: Session, ms: number): void {
   if (s.silence) clearTimeout(s.silence);
   s.silence = setTimeout(() => {
-    if (session === s && useVoice.getState().handsFree) ExpoSpeechRecognitionModule.stop();
+    if (session === s && useVoice.getState().handsFree) {
+      s.releasedAt ??= Date.now();
+      ExpoSpeechRecognitionModule.stop();
+    }
   }, ms);
 }
 
@@ -130,7 +167,9 @@ function wire(): void {
   if (wired) return;
   wired = true;
   ExpoSpeechRecognitionModule.addListener('start', () => {
-    if (session) useVoice.setState({ status: 'listening' });
+    if (!session) return;
+    session.startedAt = Date.now();
+    useVoice.setState({ status: 'listening' });
   });
   ExpoSpeechRecognitionModule.addListener('result', (e: ExpoSpeechRecognitionResultEvent) => {
     const s = session;
@@ -161,20 +200,40 @@ function wire(): void {
 
 async function finish(s: Session): Promise<void> {
   if (s.silence) clearTimeout(s.silence);
+  s.releasedAt ??= Date.now();
   voiceLevel.value = withTiming(0, { duration: 150 });
-  let text = current(s);
+  const system = current(s);
+  let text = system;
+  let cloud: string | null | undefined;
   if (!s.cancelled && s.cloud && s.uri) {
     useVoice.setState({ status: 'transcribing' });
-    const cloud = await transcribeFile(s.uri, text);
+    cloud = await transcribeFile(s.uri, text);
     if (cloud) text = cloud;
   }
+  let audio: string | undefined;
   if (s.uri) {
-    try {
-      new File(s.uri).delete();
-    } catch {
-      /* already gone */
+    if (!s.cancelled && text && s.record && journalEnabled()) audio = keepAudio(s.uri);
+    else {
+      try {
+        new File(s.uri).delete();
+      } catch {
+        /* already gone */
+      }
     }
   }
+  lastCapture =
+    !s.cancelled && text
+      ? {
+          mode: s.cloud ? 'cloud' : 'system',
+          system,
+          ...(cloud ? { cloud } : {}),
+          ...(audio ? { audio } : {}),
+          startedAt: s.startedAt,
+          releasedAt: s.releasedAt,
+          textAt: Date.now(),
+          handsFree: s.handsFree,
+        }
+      : null;
   if (session === s) session = null;
   if (s.cancelled) {
     useVoice.setState({ status: 'idle', text: '', handsFree: false, error: null });
@@ -184,6 +243,18 @@ async function finish(s: Session): Promise<void> {
   const error = text ? null : (s.error ?? t('agent.noSpeech'));
   useVoice.setState({ status: 'idle', text, handsFree: false, error });
   s.resolve(text || null);
+}
+
+/**
+ * Open the connection to the sync server while the user is still talking, so the request that
+ * follows doesn't pay for DNS + TLS (≈0.5 s to a far-away server) after the finger lifts.
+ */
+let warmedAt = 0;
+function warmUp(): void {
+  const cfg = useSync.getState().config;
+  if (!cfg || Date.now() - warmedAt < 20_000) return;
+  warmedAt = Date.now();
+  void fetch(`${cfg.url}/api/health`, { method: 'GET' }).catch(() => undefined);
 }
 
 /** Upload the recording to the sync server; `null` means "use the system's text". */
@@ -240,12 +311,15 @@ export async function listen(opts: { handsFree: boolean }): Promise<string | nul
   if (!perm.granted) return fail(t('agent.micDenied'));
   // The finger may have lifted (and cancelled) while the permission prompt was up.
   if (useVoice.getState().status !== 'starting') return null;
+  warmUp();
 
   const cloud =
     useVoice.getState().mode === 'cloud' &&
     !!useSync.getState().ai?.speech &&
     (Platform.OS === 'web' ? false : ExpoSpeechRecognitionModule.supportsRecording());
   const zh = getLocale() === 'zh';
+  const record = cloud || (journalEnabled() && ExpoSpeechRecognitionModule.supportsRecording());
+  lastCapture = null;
   return new Promise<string | null>((resolve) => {
     const s: Session = {
       committed: '',
@@ -253,9 +327,13 @@ export async function listen(opts: { handsFree: boolean }): Promise<string | nul
       uri: null,
       cancelled: false,
       cloud,
+      record,
       error: null,
       resolve,
       silence: null,
+      startedAt: Date.now(),
+      releasedAt: null,
+      handsFree: opts.handsFree,
     };
     session = s;
     try {
@@ -268,7 +346,7 @@ export async function listen(opts: { handsFree: boolean }): Promise<string | nul
         contextualStrings: vocabulary(),
         iosTaskHint: 'dictation',
         volumeChangeEventOptions: { enabled: true, intervalMillis: 80 },
-        ...(cloud
+        ...(record
           ? { recordingOptions: { persist: true, outputSampleRate: 16000, outputEncoding: 'pcmFormatInt16' } }
           : {}),
       });
@@ -285,13 +363,18 @@ export async function listen(opts: { handsFree: boolean }): Promise<string | nul
 /** Switch a running push-to-talk session to hands-free (the press turned out to be a tap). */
 export function goHandsFree(): void {
   useVoice.setState({ handsFree: true });
-  if (session) armSilence(session, current(session) ? SILENCE_MS : NOTHING_MS);
+  if (session) {
+    session.handsFree = true;
+    armSilence(session, current(session) ? SILENCE_MS : NOTHING_MS);
+  }
 }
 
 /** End the session and keep what was said. */
 export function stopListening(): void {
-  if (session) ExpoSpeechRecognitionModule.stop();
-  else if (useVoice.getState().status === 'starting') useVoice.setState({ status: 'idle' });
+  if (session) {
+    session.releasedAt ??= Date.now();
+    ExpoSpeechRecognitionModule.stop();
+  } else if (useVoice.getState().status === 'starting') useVoice.setState({ status: 'idle' });
 }
 
 /** End the session and throw away what was said. */

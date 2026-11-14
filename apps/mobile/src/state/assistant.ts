@@ -5,13 +5,16 @@ import {
   type AssistantState,
   type ModelEvent,
   type Replica,
+  type VoiceCapture,
 } from '@ai-todo/core';
 import { getLocale, t } from '@ai-todo/shared';
 import * as Haptics from 'expo-haptics';
 import { useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 import { getReplica, toast } from './actions';
+import { deleteAudio, getJournal, journalEnabled } from './journal';
 import { useSync } from './sync';
+import { getVoiceWords } from './voice';
 
 /**
  * The voice assistant on the phone. The model runs on the sync server (`/api/agent`); its tool
@@ -149,9 +152,17 @@ export function getAssistant(): Assistant {
     transport: agentTransport,
     locale: () => (getLocale() === 'zh' ? 'zh-CN' : 'en-US'),
     focus: () => ({ taskId: useAssistantFocus.getState().taskId }),
+    words: getVoiceWords,
   });
   assistant = a;
-  stopWatching = watchOutcomes(a);
+  const unwatch = watchOutcomes(a);
+  const unjournal = a.subscribe((s) => {
+    if (journalEnabled()) getJournal().observe(s.turns);
+  });
+  stopWatching = () => {
+    unwatch();
+    unjournal();
+  };
   return a;
 }
 
@@ -195,6 +206,14 @@ export function useAssistantAvailable(): boolean {
   return useSync((s) => !!s.config && (s.ai === null || (s.ai.available && s.ai.agent === true)));
 }
 
-export function speak(text: string): void {
-  void getAssistant().say(text);
+/** Hand an utterance to the assistant; `capture` says how it was spoken (for the voice journal). */
+export function speak(text: string, capture?: VoiceCapture | null): void {
+  const a = getAssistant();
+  const journal = journalEnabled() ? getJournal() : null;
+  if (journal && capture) journal.willSay(capture);
+  void a.say(text).finally(() => {
+    // “好” settling a held proposal starts no turn: its recording isn't worth keeping.
+    const unused = journal?.unused();
+    if (unused?.audio) deleteAudio(unused.audio);
+  });
 }

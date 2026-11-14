@@ -1,16 +1,17 @@
 import type { Replica } from '@ai-todo/core';
-import { parseQuickAdd } from '@ai-todo/core';
+import { parseQuickAdd, summarize } from '@ai-todo/core';
 import { describeRecurrence, formatScheduled, getLocale, type Locale, t } from '@ai-todo/shared';
 import { Download, Loader2, Mic, Sparkles, Upload, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { addTasks } from '../state/actions';
 import { AiError, draftToTask, type ExtractedTask, extractTasks, transcribe } from '../state/ai';
+import { clearJournal, exportJournal, getJournal, setJournalEnabled, useJournal } from '../state/journal';
 import { requestNotificationPermission, setReminderSettings, useReminderSettings } from '../state/reminders';
 import { timeZone, useReplica, useToday } from '../state/replica';
 import { connectSync, disconnectSync, useSyncStatus, useSyncStore } from '../state/sync';
 import { useUI } from '../state/ui';
-import { type SpeechMode, setSpeechMode, speechMode } from '../state/voice';
+import { type SpeechMode, setSpeechMode, setVoiceWords, speechMode, voiceWords } from '../state/voice';
 import { setTheme } from './theme';
 import { Button, cx, Dialog, Kbd, MOD } from './ui';
 
@@ -265,6 +266,8 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
               : t('settings.ai.status.off')}
           </p>
           <SpeechSetting />
+          <VocabularySetting />
+          <VoiceLogSetting />
         </Section>
 
         <Section title={t('settings.data')}>
@@ -330,6 +333,71 @@ function SpeechSetting() {
         cloud ? t('agent.speech.cloudHelp') : t('agent.speech.cloudOff'),
         !cloud && mode !== 'cloud',
       )}
+    </div>
+  );
+}
+
+function VocabularySetting() {
+  const [words, setWords] = useState(() => voiceWords().join('\n'));
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      <p className="text-[12.5px] font-medium text-ink-2">{t('agent.words')}</p>
+      <textarea
+        value={words}
+        onChange={(e) => setWords(e.target.value)}
+        onBlur={() => setVoiceWords(words)}
+        rows={3}
+        placeholder={t('agent.words.placeholder')}
+        aria-label={t('agent.words')}
+        className="w-full resize-y rounded-[8px] border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-jade"
+      />
+      <p className="text-[12px] text-ink-3">{t('agent.words.help')}</p>
+    </div>
+  );
+}
+
+function VoiceLogSetting() {
+  const enabled = useJournal((s) => s.enabled);
+  const records = useJournal((s) => s.records);
+  useEffect(() => void getJournal(), []);
+  const sum = summarize(records);
+  const lat = sum.firstChange ?? sum.done;
+  const sec = (ms: number) => (ms / 1000).toFixed(1);
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[12.5px] font-medium text-ink-2">{t('voiceLog.title')}</p>
+        <Toggle checked={enabled} onChange={setJournalEnabled} />
+      </div>
+      <p className="text-[12px] text-ink-3">{t('voiceLog.help')}</p>
+      {records.length ? (
+        <p className="text-[12.5px] text-ink-2">
+          {[
+            t('voiceLog.count', { n: sum.count }),
+            lat
+              ? `${t('voiceLog.latency')} ${t('voiceLog.latencyValue', { p50: sec(lat.p50), p90: sec(lat.p90) })}`
+              : '',
+            sum.applied
+              ? `${t('voiceLog.undoRate')} ${t('voiceLog.undoValue', {
+                  undone: sum.undone,
+                  applied: sum.applied,
+                  pct: Math.round((sum.undone / sum.applied) * 100),
+                })}`
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      ) : null}
+      <div className="flex gap-2">
+        <Button size="sm" onClick={exportJournal} disabled={!records.length}>
+          <Download className="size-3.5" />
+          {t('voiceLog.export')}
+        </Button>
+        <Button size="sm" onClick={clearJournal} disabled={!records.length}>
+          {t('voiceLog.clear')}
+        </Button>
+      </div>
     </div>
   );
 }

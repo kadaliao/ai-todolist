@@ -90,6 +90,47 @@ describe('assistant turns', () => {
     expect(a.getState().turns.at(-1)?.status).toBe('undone');
   });
 
+  it('ends the turn in one round trip when the reply comes with the edits', async () => {
+    const { r, a, transport } = setup([
+      () => [say('加好了。'), call('add-tasks', { tasks: [{ title: 'a' }] })],
+    ]);
+    await a.say('加 a');
+    expect(transport.requests).toHaveLength(1);
+    expect(a.getState().turns.at(-1)).toMatchObject({ status: 'applied', reply: '加好了。' });
+    expect(open(r).map((t) => t.title)).toEqual(['a']);
+  });
+
+  it('keeps going after an early reply when a call fails or needs a yes', async () => {
+    const failing = setup([
+      () => [say('加好了。'), call('add-tasks', { tasks: [{ title: 'a', project: '公座' }] })],
+      () => [say('没有“公座”这个项目，要加到收件箱吗？')],
+    ]);
+    await failing.a.say('加 a 到公座');
+    expect(failing.transport.requests).toHaveLength(2);
+    expect(failing.a.getState().turns.at(-1)).toMatchObject({
+      status: 'answered',
+      reply: '没有“公座”这个项目，要加到收件箱吗？',
+    });
+
+    const big = setup([
+      (req) => [say('删好了。'), call('delete-tasks', { ids: [refOf(req, 'x')] })],
+      () => [say('要删掉 x 吗？')],
+    ]);
+    big.r.dispatch(createTask({ title: 'x' }));
+    await big.a.say('删掉 x');
+    expect(big.a.pending()?.reply).toBe('要删掉 x 吗？');
+  });
+
+  it('a reply with only reads is not the end: the model still sees the results', async () => {
+    const { a, transport } = setup([
+      () => [say('我找找。'), call('find-tasks', { query: '周报' })],
+      () => [say('没有找到周报。')],
+    ]);
+    await a.say('周报在哪');
+    expect(transport.requests).toHaveLength(2);
+    expect(a.getState().turns.at(-1)?.reply).toBe('我找找。\n没有找到周报。');
+  });
+
   it('answers questions without changing anything', async () => {
     const { r, a } = setup([() => [say('今天还有 1 件事：写周报。')]]);
     r.dispatch(createTask({ title: '写周报', scheduled: { date: '2026-11-13' } }));

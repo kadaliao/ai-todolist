@@ -1,9 +1,17 @@
-import { type AgentTransport, Assistant, type AssistantState, type ModelEvent } from '@ai-todo/core';
+import {
+  type AgentTransport,
+  Assistant,
+  type AssistantState,
+  type ModelEvent,
+  type VoiceCapture,
+} from '@ai-todo/core';
 import { getLocale, t } from '@ai-todo/shared';
 import { useSyncExternalStore } from 'react';
 import { getReplica } from './actions';
 import { ndjson } from './ai';
+import { getJournal, journalEnabled } from './journal';
 import { type Route, useUI } from './ui';
+import { voiceWords } from './voice';
 
 /**
  * The voice assistant on web/desktop: the shared core `Assistant` running on this device's
@@ -43,6 +51,10 @@ export function getAssistant(): Assistant {
         const view = describeRoute(ui.route);
         return { taskId: ui.detailId ?? ui.focusId, ...(view ? { view } : {}) };
       },
+      words: voiceWords,
+    });
+    instance.subscribe((s) => {
+      if (journalEnabled()) getJournal().observe(s.turns);
     });
     let lastApplied = 0;
     instance.subscribe((s) => {
@@ -71,10 +83,20 @@ export function useAssistant(): AssistantState {
   );
 }
 
-/** Project and label names, to help speech recognition with the user's own words. */
+/** Hand an utterance to the assistant; `capture` says how it was spoken (for the voice journal). */
+export function speak(text: string, capture?: VoiceCapture): Promise<void> {
+  const journal = journalEnabled() ? getJournal() : null;
+  if (journal && capture) journal.willSay(capture);
+  return getAssistant()
+    .say(text)
+    .finally(() => journal?.unused());
+}
+
+/** The user's vocabulary, project and label names, to help speech recognition. */
 export function vocabulary(): string[] {
   const s = getReplica().store;
   return [
+    ...voiceWords(),
     ...s
       .all('project')
       .filter((p) => !p.deletedAt && !p.archivedAt)

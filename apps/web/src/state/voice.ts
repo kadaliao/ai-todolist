@@ -1,3 +1,4 @@
+import type { VoiceCapture } from '@ai-todo/core';
 import { getLocale, t } from '@ai-todo/shared';
 import { useSyncStore } from './sync';
 
@@ -73,7 +74,26 @@ export interface ListenOptions {
   /** Recording ended and cloud transcription started. */
   onTranscribing?(): void;
   /** Called exactly once. Empty text means nothing was heard. */
-  onEnd(result: { text: string } | { error: string }): void;
+  onEnd(result: { text: string; capture?: VoiceCapture } | { error: string }): void;
+}
+
+const WORDS_KEY = 'docket.speechWords';
+
+/** Names and words you say often (Settings); they steer recognition and the assistant. */
+export function voiceWords(): string[] {
+  const raw = localStorage.getItem(WORDS_KEY) ?? '';
+  return [
+    ...new Set(
+      raw
+        .split(/[\n,，、;；]+/)
+        .map((w) => w.trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, 100);
+}
+
+export function setVoiceWords(raw: string): void {
+  localStorage.setItem(WORDS_KEY, raw);
 }
 
 const SILENCE_MS = 1400;
@@ -99,6 +119,8 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
   let lastActivity = Date.now();
   let spoke = false;
   const started = Date.now();
+  let releasedAt: number | null = null;
+  let cloudText: string | undefined;
 
   // --- microphone level (and the stream for cloud recording) ---------------------------------
   let stream: MediaStream | null = null;
@@ -154,7 +176,18 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
     if (ended) return;
     ended = true;
     release();
-    opts.onEnd(cancelled ? { text: '' } : result);
+    if (cancelled) return opts.onEnd({ text: '' });
+    if ('error' in result || !result.text) return opts.onEnd(result);
+    const capture: VoiceCapture = {
+      mode,
+      system: heard(),
+      ...(cloudText ? { cloud: cloudText } : {}),
+      startedAt: started,
+      releasedAt: releasedAt ?? Date.now(),
+      textAt: Date.now(),
+      handsFree: opts.handsFree(),
+    };
+    opts.onEnd({ text: result.text, capture });
   };
 
   // --- recognizer (system mode, or live preview in cloud mode) -------------------------------
@@ -222,6 +255,7 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
       opts.onTranscribing?.();
       try {
         const text = await transcribeCloud(blob, lang.slice(0, 2), opts.hints);
+        cloudText = text || undefined;
         await Promise.race([recDone, new Promise((r) => setTimeout(r, 300))]);
         finish({ text: text || heard() });
       } catch (e) {
@@ -234,6 +268,7 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
 
   const stop = () => {
     if (ended) return;
+    releasedAt ??= Date.now();
     try {
       rec?.stop();
     } catch {

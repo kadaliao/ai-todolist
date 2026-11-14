@@ -19,7 +19,7 @@ import { requestPermission, setNotifySettings, useNotify } from '../state/notifi
 import { useReplica } from '../state/replica';
 import { setSetting } from '../state/storage';
 import { connectSync, disconnectSync, syncNow, useSync } from '../state/sync';
-import { setSpeechMode, useVoice } from '../state/voice';
+import { getVoiceWords, setSpeechMode, setVoiceWords, useVoice } from '../state/voice';
 import { useColors } from '../theme';
 import { WIDGET_NAME } from '../widget/android';
 
@@ -31,6 +31,7 @@ export default function SettingsScreen() {
   const notify = useNotify();
   const speechMode = useVoice((s) => s.mode);
   const cloudAvailable = !!sync.ai?.speech;
+  const [words, setWords] = useState(() => getVoiceWords().join('\n'));
   const [url, setUrl] = useState(sync.config?.url ?? '');
   const [token, setToken] = useState(sync.config?.token ?? '');
   const [busy, setBusy] = useState(false);
@@ -198,6 +199,30 @@ export default function SettingsScreen() {
             cloudAvailable ? t('agent.speech.cloudHelp') : t('agent.speech.cloudOff')
           }`.replaceAll('：', zh ? '：' : ': ')}
         </Txt>
+        <TextInput
+          value={words}
+          onChangeText={setWords}
+          onEndEditing={() => setVoiceWords(words)}
+          onBlur={() => setVoiceWords(words)}
+          placeholder={t('agent.words.placeholder')}
+          placeholderTextColor={c.ink3}
+          multiline
+          accessibilityLabel={t('agent.words')}
+          style={[
+            styles.input,
+            styles.words,
+            { color: c.ink, borderColor: c.line, backgroundColor: c.surface },
+          ]}
+        />
+        <Txt variant="meta" style={styles.help}>
+          {t('agent.words.help')}
+        </Txt>
+        <Pressable onPress={() => router.push('/voice-log')} accessibilityRole="button">
+          <View style={[styles.row, { backgroundColor: c.surface, borderColor: c.line }]}>
+            <Txt style={{ flex: 1 }}>{t('voiceLog.title')}</Txt>
+            <Txt tone={c.ink3}>›</Txt>
+          </View>
+        </Pressable>
       </Group>
 
       <Group title={t('settings.ai')}>
@@ -316,6 +341,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   syncRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  words: { height: undefined, minHeight: 72, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

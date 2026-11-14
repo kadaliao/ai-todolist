@@ -15,7 +15,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import { create } from 'zustand';
 import { speak } from '../state/assistant';
-import { cancelListening, goHandsFree, listen, stopListening, useVoice, voiceLevel } from '../state/voice';
+import {
+  cancelListening,
+  goHandsFree,
+  listen,
+  stopListening,
+  takeCapture,
+  useVoice,
+  voiceLevel,
+} from '../state/voice';
 import { useColors } from '../theme';
 import { Txt } from './ui';
 
@@ -32,7 +40,7 @@ const CANCEL_DY = -70;
 
 /** Listen hands-free and hand the result to the assistant. */
 export function talkHandsFree(): void {
-  void listen({ handsFree: true }).then((text) => text && speak(text));
+  void listen({ handsFree: true }).then((text) => text && speak(text, takeCapture()));
 }
 
 /**
@@ -104,7 +112,7 @@ export function MicButton({
         pressed.value = withSpring(1, { damping: 16, stiffness: 300 });
         if (p.toggling) return;
         // Start right away so the first words aren't lost; a tap turns it into hands-free.
-        void listen({ handsFree: false }).then((text) => text && speak(text));
+        void listen({ handsFree: false }).then((text) => text && speak(text, takeCapture()));
         p.timer = setTimeout(() => {
           p.holding = true;
           p.timer = null;
