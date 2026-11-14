@@ -8,12 +8,14 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "buildNumber": "2",
       "bundleIdentifier": "com.kadaliao.docket",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Docket uses the microphone when you talk to it to add or change tasks.",
-        "NSSpeechRecognitionUsageDescription": "Docket turns what you say into text so it can add and change your tasks."
+        "NSSpeechRecognitionUsageDescription": "Docket turns what you say into text so it can add and change your tasks.",
+        "NSPhotoLibraryUsageDescription": "Docket doesn’t access your photo library."
       },
       "entitlements": {
         "com.apple.security.application-groups": ["group.com.kadaliao.docket"]
