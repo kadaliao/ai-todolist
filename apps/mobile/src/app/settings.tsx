@@ -19,6 +19,7 @@ import { requestPermission, setNotifySettings, useNotify } from '../state/notifi
 import { useReplica } from '../state/replica';
 import { setSetting } from '../state/storage';
 import { connectSync, disconnectSync, syncNow, useSync } from '../state/sync';
+import { setSpeechMode, useVoice } from '../state/voice';
 import { useColors } from '../theme';
 import { WIDGET_NAME } from '../widget/android';
 
@@ -28,6 +29,8 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const sync = useSync();
   const notify = useNotify();
+  const speechMode = useVoice((s) => s.mode);
+  const cloudAvailable = !!sync.ai?.speech;
   const [url, setUrl] = useState(sync.config?.url ?? '');
   const [token, setToken] = useState(sync.config?.token ?? '');
   const [busy, setBusy] = useState(false);
@@ -178,6 +181,25 @@ export default function SettingsScreen() {
         </Group>
       ) : null}
 
+      <Group title={t('agent.speech')}>
+        <Row label={zh ? '识别方式' : 'Recognizer'}>
+          <Segmented
+            value={speechMode === 'cloud' && cloudAvailable ? 'cloud' : 'system'}
+            options={[
+              ['system', t('agent.speech.system')],
+              ['cloud', t('agent.speech.cloud')],
+            ]}
+            disabled={cloudAvailable ? [] : ['cloud']}
+            onChange={(v) => setSpeechMode(v as 'system' | 'cloud')}
+          />
+        </Row>
+        <Txt variant="meta" style={styles.help}>
+          {`${t('agent.speech.system')}：${t('agent.speech.systemHelp')}\n${t('agent.speech.cloud')}：${
+            cloudAvailable ? t('agent.speech.cloudHelp') : t('agent.speech.cloudOff')
+          }`.replaceAll('：', zh ? '：' : ': ')}
+        </Txt>
+      </Group>
+
       <Group title={t('settings.ai')}>
         <Txt variant="meta" style={styles.help}>
           {t('settings.ai.help')}
@@ -240,10 +262,12 @@ function Segmented({
   value,
   options,
   onChange,
+  disabled = [],
 }: {
   value: string;
   options: [string, string][];
   onChange: (v: string) => void;
+  disabled?: string[];
 }) {
   const c = useColors();
   return (
@@ -252,7 +276,14 @@ function Segmented({
         <Pressable
           key={v}
           onPress={() => onChange(v)}
-          style={[styles.segItem, value === v && { backgroundColor: c.surface }]}
+          disabled={disabled.includes(v)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: value === v, disabled: disabled.includes(v) }}
+          style={[
+            styles.segItem,
+            value === v && { backgroundColor: c.surface },
+            disabled.includes(v) && { opacity: 0.4 },
+          ]}
         >
           <Txt
             style={{

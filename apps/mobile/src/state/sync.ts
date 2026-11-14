@@ -14,7 +14,7 @@ interface SyncStore {
   state: SyncState | 'off';
   message: string;
   config: SyncConfig | null;
-  ai: { available: boolean; model?: string; speech?: boolean } | null;
+  ai: { available: boolean; model?: string; speech?: boolean; agent?: boolean } | null;
   /** Set when local data was dropped to adopt the account; the app reloads its replica. */
   reloadNonce: number;
 }

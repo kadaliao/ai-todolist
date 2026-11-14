@@ -16,6 +16,7 @@ import { I18nManager, Platform, Settings, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Toasts } from '../components/Toasts';
 import { bindActions } from '../state/actions';
+import { getAssistant } from '../state/assistant';
 import { startNotifications } from '../state/notifications';
 import { loadReplica, ReplicaContext } from '../state/replica';
 import { getSetting } from '../state/storage';
@@ -25,7 +26,7 @@ import { useColors } from '../theme';
 
 void SplashScreen.preventAutoHideAsync();
 
-// Deep links into a sheet (docket://task/<id>, docket://add from the widget) keep the tabs underneath.
+// Deep links into a sheet (docket://task/<id>, docket://add, docket://voice from the widget) keep the tabs underneath.
 export const unstable_settings = { anchor: '(tabs)' };
 
 /** The device's preferred language (Hermes' Intl always reports en-US, so ask the OS). */
@@ -117,6 +118,13 @@ export default function RootLayout() {
     if (__DEV__ && Platform.OS === 'ios') {
       const route = Settings.get('docketRoute') as string | undefined;
       if (route) setTimeout(() => router.push(route as never), 300);
+      // `-docketSay "…|…"` sends utterances to the assistant one after another, as if spoken
+      // (headless simulators have no mic or touch).
+      const said = Settings.get('docketSay') as string | undefined;
+      if (said)
+        setTimeout(async () => {
+          for (const text of said.split('|')) await getAssistant().say(text);
+        }, 1500);
     }
   }, [fontsLoaded]);
 
@@ -167,6 +175,11 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="dump" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="assistant" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen
+            name="voice"
+            options={{ presentation: 'modal', headerShown: false, animation: 'none' }}
+          />
           <Stack.Screen name="settings" options={{ presentation: 'modal', headerShown: false }} />
           <Stack.Screen name="search" options={{ headerShown: false, animation: 'fade' }} />
         </Stack>

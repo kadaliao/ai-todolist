@@ -1,8 +1,8 @@
 {
   "ios": {
     "CFBundleDisplayName": "Docket",
-    "NSMicrophoneUsageDescription": "口述任务时，Docket 需要使用麦克风。",
-    "NSSpeechRecognitionUsageDescription": "Docket 会把你的口述转成任务。"
+    "NSMicrophoneUsageDescription": "你跟 Docket 说话来添加或修改任务时，需要使用麦克风。",
+    "NSSpeechRecognitionUsageDescription": "Docket 会把你说的话转成文字，用来添加和修改任务。"
   },
   "android": {
     "widget_dockettoday_description": "今天和过期的任务，点圆圈直接完成。"

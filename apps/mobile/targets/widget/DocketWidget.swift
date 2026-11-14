@@ -157,15 +157,30 @@ struct DateBadge: View {
   }
 }
 
+/// Talk (opens the assistant listening) and type (quick add).
 struct AddButton: View {
+  private let zh = L(nil).zh
+
   var body: some View {
-    Link(destination: URL(string: "docket://add")!) {
-      Image(systemName: "plus")
-        .font(.system(size: 14, weight: .bold))
-        .foregroundStyle(.white)
-        .frame(width: 30, height: 30)
-        .background(Circle().fill(Color.jade))
-        .widgetAccentable()
+    HStack(spacing: 8) {
+      Link(destination: URL(string: "docket://voice")!) {
+        Image(systemName: "mic.fill")
+          .font(.system(size: 14, weight: .bold))
+          .foregroundStyle(.white)
+          .frame(width: 30, height: 30)
+          .background(Circle().fill(Color.jade))
+          .widgetAccentable()
+      }
+      .accessibilityLabel(zh ? "跟 Docket 说" : "Talk to Docket")
+      Link(destination: URL(string: "docket://add")!) {
+        Image(systemName: "plus")
+          .font(.system(size: 14, weight: .bold))
+          .foregroundStyle(Color.jade)
+          .frame(width: 30, height: 30)
+          .background(Circle().fill(Color.jade.opacity(0.14)))
+          .widgetAccentable()
+      }
+      .accessibilityLabel(zh ? "添加任务" : "Add task")
     }
   }
 }

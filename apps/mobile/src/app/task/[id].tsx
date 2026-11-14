@@ -1,7 +1,19 @@
 import { createTask, createTasks, moveTasks, type Priority, sortByOrder, type Task } from '@ai-todo/core';
 import { describeRecurrence, formatScheduled, getLocale, t } from '@ai-todo/shared';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Bell, Calendar, Flag, Hash, Inbox, Plus, Repeat, Sparkles, Tag, Trash2 } from 'lucide-react-native';
+import {
+  Bell,
+  Calendar,
+  Flag,
+  Hash,
+  Inbox,
+  Mic,
+  Plus,
+  Repeat,
+  Sparkles,
+  Tag,
+  Trash2,
+} from 'lucide-react-native';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
@@ -19,6 +31,7 @@ import { Checkbox } from '../../components/Checkbox';
 import { Chip, Txt } from '../../components/ui';
 import { editTask, removeTasks, run, toggleComplete } from '../../state/actions';
 import { breakdownTask } from '../../state/ai';
+import { setAssistantFocus } from '../../state/assistant';
 import { useQuery, useReplica, useToday } from '../../state/replica';
 import { PRIORITY_COLOR, readable, useColors } from '../../theme';
 
@@ -51,6 +64,11 @@ function Detail({ task, today }: { task: Task; today: string }) {
   const [notes, setNotes] = useState(task.notes);
   useEffect(() => setTitle(task.title), [task.title]);
   useEffect(() => setNotes(task.notes), [task.notes]);
+  // "这个 / this" in the assistant means this task while it's open.
+  useEffect(() => {
+    setAssistantFocus(task.id);
+    return () => setAssistantFocus(null);
+  }, [task.id]);
 
   const data = useQuery(
     (s) => ({
@@ -101,6 +119,15 @@ function Detail({ task, today }: { task: Task; today: string }) {
           returnKeyType="done"
           style={[styles.title, { color: task.completedAt ? c.ink3 : c.ink }]}
         />
+        <Pressable
+          onPress={() => router.push({ pathname: '/assistant', params: { listen: '1' } })}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={getLocale() === 'zh' ? '对这个任务说话' : 'Talk about this task'}
+          style={[styles.talk, { backgroundColor: c.jadeSoft }]}
+        >
+          <Mic size={18} color={c.jade} />
+        </Pressable>
       </View>
 
       <View style={[styles.fields, { borderColor: c.line }]}>
@@ -374,6 +401,7 @@ function Subtasks({ task, subtasks }: { task: Task; subtasks: Task[] }) {
 const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', gap: 14, paddingHorizontal: 20, alignItems: 'flex-start' },
   title: { flex: 1, fontSize: 21, lineHeight: 28, fontWeight: '600', paddingTop: 0 },
+  talk: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   fields: {
     marginTop: 18,
     marginHorizontal: 16,

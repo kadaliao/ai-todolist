@@ -8,6 +8,8 @@ type Hex = `#${string}`;
 
 const CHECK =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const MIC =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="#FFFFFF"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/></svg>';
 const PLUS =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/></svg>';
 
@@ -20,6 +22,7 @@ function strings(locale: string) {
     yesterday: zh ? '昨天' : 'Yesterday',
     allClear: zh ? '今天没有任务了' : 'All clear today',
     hint: zh ? '点 + 添加新任务' : 'Tap + to add a task',
+    talk: zh ? '跟 Docket 说' : 'Talk to Docket',
     openApp: zh ? '打开 Docket 开始使用' : 'Open Docket to get started',
     remaining: (n: number) => (zh ? `${n} 项待办` : n === 1 ? '1 task' : `${n} tasks`),
     weekday: (d: Date) =>
@@ -166,6 +169,22 @@ export function TodayWidget({ snapshot, done, now, dark }: TodayWidgetProps) {
               style={{ fontSize: 11, color: c.ink3 as Hex }}
             />
           </FlexWidget>
+        </FlexWidget>
+        <FlexWidget
+          clickAction="OPEN_URI"
+          clickActionData={{ uri: 'docket://voice' }}
+          accessibilityLabel={s.talk}
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 17,
+            backgroundColor: c.jade as Hex,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 8,
+          }}
+        >
+          <SvgWidget svg={MIC} style={{ width: 18, height: 18 }} />
         </FlexWidget>
         <FlexWidget
           clickAction="OPEN_URI"
