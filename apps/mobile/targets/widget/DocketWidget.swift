@@ -451,6 +451,10 @@ struct DocketTodayWidget: Widget {
 struct DocketWidgetBundle: WidgetBundle {
   var body: some Widget {
     DocketTodayWidget()
+    TalkWidget()
+    if #available(iOS 18.0, *) {
+      TalkControl()
+    }
   }
 }
 

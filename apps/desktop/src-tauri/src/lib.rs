@@ -1,7 +1,11 @@
 //! Docket desktop shell: the web app in a native window, plus what a browser can't do —
-//! a global quick-entry shortcut, a menu-bar icon, and staying alive for reminders.
+//! a global shortcut (tap: quick entry, hold: talk), a menu-bar icon, and staying alive for
+//! reminders.
 
 mod menu;
+
+use std::sync::Mutex;
+use std::time::Duration;
 
 use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -16,6 +20,60 @@ fn quick_shortcut() -> Shortcut {
     #[cfg(not(target_os = "macos"))]
     let mods = Modifiers::CONTROL | Modifiers::SHIFT;
     Shortcut::new(Some(mods), Code::Space)
+}
+
+/// Holding the shortcut this long means “talk”; a shorter press opens quick entry.
+const HOLD: Duration = Duration::from_millis(300);
+
+/// One press of the global shortcut: which press it is, and whether it turned into talking.
+#[derive(Default)]
+struct Press {
+    seq: u64,
+    down: bool,
+    talking: bool,
+}
+
+fn on_shortcut(app: &AppHandle, state: ShortcutState) {
+    let press = app.state::<Mutex<Press>>();
+    let mut p = press.lock().unwrap();
+    match state {
+        ShortcutState::Pressed => {
+            if p.down {
+                return; // key repeat
+            }
+            p.seq += 1;
+            p.down = true;
+            p.talking = false;
+            let seq = p.seq;
+            let app = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(HOLD);
+                let press = app.state::<Mutex<Press>>();
+                let mut p = press.lock().unwrap();
+                if p.down && p.seq == seq && !p.talking {
+                    p.talking = true;
+                    drop(p);
+                    // Push to talk: the main window listens until the key comes up.
+                    if let Some(q) = app.get_webview_window("quick") {
+                        let _ = q.hide();
+                    }
+                    show_main(&app);
+                    let _ = app.emit_to("main", "assistant-hold", true);
+                }
+            });
+        }
+        ShortcutState::Released => {
+            p.down = false;
+            if p.talking {
+                p.talking = false;
+                drop(p);
+                let _ = app.emit_to("main", "assistant-hold", false);
+            } else {
+                drop(p);
+                toggle_quick(app);
+            }
+        }
+    }
 }
 
 fn toggle_quick(app: &AppHandle) {
@@ -50,16 +108,13 @@ pub fn run() {
         )
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state() == ShortcutState::Pressed {
-                        toggle_quick(app);
-                    }
-                })
+                .with_handler(|app, _shortcut, event| on_shortcut(app, event.state()))
                 .build(),
         )
+        .manage(Mutex::new(Press::default()))
         .setup(|app| {
             if let Err(e) = app.global_shortcut().register(quick_shortcut()) {
-                eprintln!("could not register the quick-entry shortcut: {e}");
+                eprintln!("could not register the global shortcut: {e}");
             }
 
             let menu = menu::tray_menu(app.handle())?;

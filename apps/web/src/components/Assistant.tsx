@@ -93,6 +93,15 @@ export function listenHandsFree(): void {
   void startVoice(true);
 }
 
+/**
+ * Desktop push to talk: the global shortcut held down (`true`) starts listening, letting go
+ * (`false`) sends what was heard.
+ */
+export function holdToTalk(down: boolean): void {
+  if (down) void startVoice(false);
+  else stopVoice();
+}
+
 const stopVoice = () => {
   if (session) session.stop();
   else if (starting) early = 'stop';

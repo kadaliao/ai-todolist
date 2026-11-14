@@ -83,6 +83,7 @@
         }
       ],
       "@bacons/apple-targets",
+      "./plugins/withAppShortcuts",
       [
         "expo-speech-recognition",
         {
@@ -117,6 +118,7 @@
           ]
         }
       ],
+      "./plugins/withTalkTile",
       [
         "./plugins/withLocalizedWidgetPreview",
         {

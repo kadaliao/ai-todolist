@@ -34,6 +34,8 @@ pub struct Strings {
     // Menu-bar (tray) menu
     pub quick_add: &'static str,
     pub talk: &'static str,
+    /// Shown next to “Talk to Docket…”: holding the global shortcut talks.
+    pub hold: &'static str,
     pub show_docket: &'static str,
 }
 
@@ -61,6 +63,7 @@ const ZH: Strings = Strings {
     help: "帮助",
     quick_add: "快速添加…",
     talk: "跟 Docket 说…",
+    hold: "按住",
     show_docket: "显示 Docket",
 };
 
@@ -88,6 +91,7 @@ const EN: Strings = Strings {
     help: "Help",
     quick_add: "Quick Add…",
     talk: "Talk to Docket…",
+    hold: "hold",
     show_docket: "Show Docket",
 };
 
@@ -185,7 +189,12 @@ pub fn tray_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         Some("CmdOrCtrl+Shift+Space"),
     )?;
-    let talk = MenuItem::with_id(app, "talk", s.talk, true, None::<&str>)?;
+    #[cfg(target_os = "macos")]
+    let keys = "⌘⇧Space";
+    #[cfg(not(target_os = "macos"))]
+    let keys = "Ctrl+Shift+Space";
+    let talk_label = format!("{}  ({} {})", s.talk, s.hold, keys);
+    let talk = MenuItem::with_id(app, "talk", talk_label, true, None::<&str>)?;
     let show = MenuItem::with_id(app, "show", s.show_docket, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", s.quit, true, Some("CmdOrCtrl+Q"))?;
     Menu::with_items(

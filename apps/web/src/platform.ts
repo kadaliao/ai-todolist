@@ -3,8 +3,9 @@ import { addFromText } from './components/QuickAdd';
 import { setNotifier } from './state/reminders';
 
 /**
- * Native shell integration. In the desktop app (Tauri) reminders use system notifications and
- * the global quick-entry window hands typed text to this window. In a browser this is a no-op.
+ * Native shell integration. In the desktop app (Tauri) reminders use system notifications, the
+ * global quick-entry window hands typed text to this window, and holding the global shortcut
+ * talks to the assistant. In a browser this is a no-op.
  */
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -35,5 +36,9 @@ export async function initPlatform(_replica: Replica): Promise<void> {
   // Menu-bar “Talk to Docket…”.
   await listen('assistant-listen', () => {
     void import('./components/Assistant').then((m) => m.listenHandsFree());
+  });
+  // The global shortcut held down: push to talk, from any app.
+  await listen<boolean>('assistant-hold', (event) => {
+    void import('./components/Assistant').then((m) => m.holdToTalk(event.payload));
   });
 }

@@ -3,9 +3,18 @@
     "CFBundleDisplayName": "Docket",
     "NSMicrophoneUsageDescription": "你跟 Docket 说话来添加或修改任务时，需要使用麦克风。",
     "NSSpeechRecognitionUsageDescription": "Docket 会把你说的话转成文字，用来添加和修改任务。",
-    "NSPhotoLibraryUsageDescription": "Docket 不会访问你的照片图库。"
+    "NSPhotoLibraryUsageDescription": "Docket 不会访问你的照片图库。",
+    "Localizable.strings": {
+      "Talk to Docket": "跟 Docket 说",
+      "Opens Docket and starts listening.": "打开 Docket，直接开始听你说。",
+      "Add to Docket": "记到 Docket",
+      "Adds a task to your Docket Inbox.": "把一件事加到 Docket 的收件箱。",
+      "Task": "要记的事",
+      "What should I add?": "要记什么？"
+    }
   },
   "android": {
-    "widget_dockettoday_description": "今天和过期的任务，点圆圈直接完成。"
+    "widget_dockettoday_description": "今天和过期的任务，点圆圈直接完成。",
+    "tile_talk": "跟 Docket 说"
   }
 }
