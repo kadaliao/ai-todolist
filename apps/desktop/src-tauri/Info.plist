@@ -10,5 +10,10 @@
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<!-- The assistant listens when you hold the mic or Space (WKWebView getUserMedia / speech recognition). -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Docket 在你按住麦克风时听你说要做的事。Docket listens while you hold the mic, to hear what you want done.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Docket 把你说的话转成文字，交给助手处理。Docket turns what you say into text for the assistant.</string>
 </dict>
 </plist>

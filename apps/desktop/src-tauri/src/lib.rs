@@ -5,7 +5,7 @@ mod menu;
 
 use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, RunEvent, WindowEvent,
+    AppHandle, Emitter, Manager, RunEvent, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -72,6 +72,11 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quick" => toggle_quick(app),
+                    "talk" => {
+                        // Bring the window up and start listening (the web app opens the assistant).
+                        show_main(app);
+                        let _ = app.emit_to("main", "assistant-listen", ());
+                    }
                     "show" => show_main(app),
                     "quit" => app.exit(0),
                     _ => {}

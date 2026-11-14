@@ -8,6 +8,7 @@ import {
   Hash,
   Inbox,
   Keyboard,
+  Mic,
   Moon,
   Plus,
   Settings,
@@ -96,6 +97,15 @@ export function CommandPalette() {
             }}
           >
             {t('palette.newTask')}
+          </Item>
+          <Item
+            icon={<Mic className="text-jade" />}
+            onSelect={() => {
+              close();
+              useUI.getState().set({ assistantOpen: true });
+            }}
+          >
+            {t('agent.title')}
           </Item>
           <Item
             icon={<Sparkles className="text-jade" />}

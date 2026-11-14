@@ -70,6 +70,8 @@ interface UIState {
   settingsOpen: boolean;
   shortcutsOpen: boolean;
   brainDumpOpen: boolean;
+  /** Voice assistant panel. */
+  assistantOpen: boolean;
   /** Keyboard date picker (`d`) for the selection. */
   scheduleOpen: boolean;
   sidebarOpen: boolean;
@@ -106,6 +108,7 @@ export const useUI = create<UIState>((set, get) => ({
   settingsOpen: false,
   shortcutsOpen: false,
   brainDumpOpen: false,
+  assistantOpen: false,
   scheduleOpen: false,
   sidebarOpen: false,
   quickAddNonce: 0,

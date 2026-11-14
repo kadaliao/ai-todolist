@@ -6,6 +6,7 @@ import { DragDropProvider, KeyboardSensor, PointerSensor } from '@dnd-kit/react'
 import { Menu as MenuIcon, Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
+import { AssistantDock } from './components/Assistant';
 import { CommandPalette } from './components/CommandPalette';
 import { DatePicker } from './components/DatePicker';
 import { BrainDump, RescheduleDialog, SettingsDialog, ShortcutsDialog, Toasts } from './components/Overlays';
@@ -155,6 +156,7 @@ export function App({ onLocale }: { onLocale: (l: Locale) => void }) {
         <ShortcutsDialog />
         <RescheduleDialog />
         <BrainDump />
+        <AssistantDock offsetRight={wide && detailId ? 400 : 0} />
         <QuickSchedule />
         <Toasts />
       </DragDropProvider>

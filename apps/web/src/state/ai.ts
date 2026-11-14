@@ -33,7 +33,7 @@ export function aiReady(): boolean {
   return !!s.config && s.ai?.available !== false;
 }
 
-async function* ndjson<T>(path: string, body: unknown, signal?: AbortSignal): AsyncGenerator<T> {
+export async function* ndjson<T>(path: string, body: unknown, signal?: AbortSignal): AsyncGenerator<T> {
   const { base, token } = endpoint();
   const res = await fetch(`${base}${path}`, {
     method: 'POST',

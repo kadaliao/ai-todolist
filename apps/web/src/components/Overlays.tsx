@@ -10,6 +10,7 @@ import { requestNotificationPermission, setReminderSettings, useReminderSettings
 import { timeZone, useReplica, useToday } from '../state/replica';
 import { connectSync, disconnectSync, useSyncStatus, useSyncStore } from '../state/sync';
 import { useUI } from '../state/ui';
+import { type SpeechMode, setSpeechMode, speechMode } from '../state/voice';
 import { setTheme } from './theme';
 import { Button, cx, Dialog, Kbd, MOD } from './ui';
 
@@ -263,6 +264,7 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
               ? t('settings.ai.status.ok', { model: ai.model ?? '' })
               : t('settings.ai.status.off')}
           </p>
+          <SpeechSetting />
         </Section>
 
         <Section title={t('settings.data')}>
@@ -287,6 +289,48 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
         </Section>
       </div>
     </Dialog>
+  );
+}
+
+function SpeechSetting() {
+  const cloud = useSyncStore((s) => !!s.ai?.speech);
+  const [mode, setMode] = useState(speechMode);
+  const pick = (m: SpeechMode) => {
+    setSpeechMode(m);
+    setMode(m);
+  };
+  const option = (m: SpeechMode, label: string, help: string, disabled = false) => (
+    <label
+      className={cx(
+        'flex cursor-default items-start gap-2.5 rounded-[8px] px-2 py-1.5 hover:bg-hover',
+        disabled && 'opacity-50',
+      )}
+    >
+      <input
+        type="radio"
+        name="speech"
+        className="mt-[3px] accent-[var(--jade)]"
+        checked={mode === m}
+        disabled={disabled}
+        onChange={() => pick(m)}
+      />
+      <span>
+        <span className="block text-[13px]">{label}</span>
+        <span className="block text-[12px] text-ink-3">{help}</span>
+      </span>
+    </label>
+  );
+  return (
+    <div className="mt-1 flex flex-col gap-0.5">
+      <p className="text-[12.5px] font-medium text-ink-2">{t('agent.speech')}</p>
+      {option('system', t('agent.speech.system'), t('agent.speech.systemHelp'))}
+      {option(
+        'cloud',
+        t('agent.speech.cloud'),
+        cloud ? t('agent.speech.cloudHelp') : t('agent.speech.cloudOff'),
+        !cloud && mode !== 'cloud',
+      )}
+    </div>
   );
 }
 

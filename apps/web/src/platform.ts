@@ -32,4 +32,8 @@ export async function initPlatform(_replica: Replica): Promise<void> {
   await listen<{ text: string; ignore: string[] }>('quick-add', (event) => {
     addFromText(event.payload.text, event.payload.ignore);
   });
+  // Menu-bar “Talk to Docket…”.
+  await listen('assistant-listen', () => {
+    void import('./components/Assistant').then((m) => m.listenHandsFree());
+  });
 }

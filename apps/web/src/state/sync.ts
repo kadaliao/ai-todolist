@@ -14,7 +14,7 @@ interface SyncStore {
   state: SyncState | 'off';
   message: string;
   config: SyncConfig | null;
-  ai: { available: boolean; model?: string; speech?: boolean } | null;
+  ai: { available: boolean; model?: string; agent?: boolean; speech?: boolean } | null;
   lastSync: number | null;
 }
 
