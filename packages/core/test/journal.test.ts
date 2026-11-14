@@ -100,6 +100,20 @@ describe('voice journal', () => {
     expect(j.list()[0]).toMatchObject({ status: 'applied', answer: '好' });
   });
 
+  it('keeps the user’s verdict and counts it', async () => {
+    const { a, j } = setup([[call('add-tasks', { tasks: [{ title: '周报' }], reply: '好' })]]);
+    await a.say('粥报');
+    const id = j.list()[0]?.id as string;
+    j.label(id, { said: '周报', ok: false });
+    expect(j.list()[0]?.label).toEqual({ said: '周报', ok: false });
+    // Saying it was heard right removes the correction; the verdict stays.
+    j.label(id, { said: '粥报' });
+    expect(j.list()[0]?.label).toEqual({ ok: false });
+    expect(summarize(j.list())).toMatchObject({ judged: 1, right: 0, misheard: 0 });
+    j.label(id, { ok: null });
+    expect(j.list()[0]?.label).toBeUndefined();
+  });
+
   it('summarizes latency over voice turns', () => {
     const rec = (firstChangeMs: number): VoiceRecord => ({
       id: String(firstChangeMs),

@@ -287,6 +287,13 @@ const zh = {
   'voiceLog.status.undone': '被撤销',
   'voiceLog.status.error': '出错',
   'voiceLog.status.thinking': '处理中',
+  'voiceLog.labelHelp': '点开一条可以标注：助手做得对不对，以及实际说的是什么。标注过的会进评测集。',
+  'voiceLog.right': '对',
+  'voiceLog.wrong': '不对',
+  'voiceLog.said': '实际说的是',
+  'voiceLog.judged': '标注',
+  'voiceLog.judgedValue': '{right}/{judged} 对，{misheard} 条听错',
+  'voiceLog.misheard': '听错',
 
   'change.added': '新增',
   'change.completed': '完成',
@@ -602,6 +609,14 @@ const en: Record<MessageKey, string> = {
   'voiceLog.status.undone': 'Undone',
   'voiceLog.status.error': 'Error',
   'voiceLog.status.thinking': 'Working',
+  'voiceLog.labelHelp':
+    'Open an entry to label it: did the assistant get it right, and what did you actually say. Labelled entries become the evaluation set.',
+  'voiceLog.right': 'Right',
+  'voiceLog.wrong': 'Wrong',
+  'voiceLog.said': 'What I actually said',
+  'voiceLog.judged': 'Labelled',
+  'voiceLog.judgedValue': '{right}/{judged} right, {misheard} misheard',
+  'voiceLog.misheard': 'Misheard',
 
   'change.added': 'Added',
   'change.completed': 'Done',

@@ -48,6 +48,15 @@ export interface VoiceRecord {
   /** “好” / “算了” that settled a held proposal. */
   answer?: string;
   error?: string;
+  /** The user's verdict, which turns the journal into a labelled evaluation set. */
+  label?: VoiceLabel;
+}
+
+export interface VoiceLabel {
+  /** What was actually said, when recognition got it wrong. */
+  said?: string;
+  /** Whether the assistant ended up doing the right thing. */
+  ok?: boolean;
 }
 
 /** Records kept; audio is kept only for the newest {@link AUDIO_LIMIT}. */
@@ -120,6 +129,10 @@ export interface JournalSummary {
   applied: number;
   undone: number;
   errors: number;
+  /** Records the user judged, and how many of those were right / correctly heard. */
+  judged: number;
+  right: number;
+  misheard: number;
 }
 
 function percentiles(values: number[]): { p50: number; p90: number; n: number } | null {
@@ -141,6 +154,9 @@ export function summarize(records: VoiceRecord[]): JournalSummary {
     applied: records.filter((r) => r.status === 'applied' || r.status === 'undone').length,
     undone: records.filter((r) => r.status === 'undone').length,
     errors: records.filter((r) => r.status === 'error').length,
+    judged: records.filter((r) => r.label?.ok !== undefined).length,
+    right: records.filter((r) => r.label?.ok === true).length,
+    misheard: records.filter((r) => r.label?.said !== undefined).length,
   };
 }
 
@@ -208,6 +224,26 @@ export class Journal {
     const over = this.records.length - JOURNAL_LIMIT;
     const dropped = over > 0 ? this.records.splice(0, over) : [];
     this.save(this.records, dropped);
+  }
+
+  /** Record the user's verdict on one entry; `null` removes that part of the label. */
+  label(id: string, patch: { said?: string | null; ok?: boolean | null }): void {
+    const i = this.records.findIndex((r) => r.id === id);
+    const old = this.records[i];
+    if (!old) return;
+    const label: VoiceLabel = { ...old.label };
+    if (patch.said !== undefined) {
+      const said = patch.said?.trim();
+      if (said && said !== old.heard) label.said = said;
+      else delete label.said;
+    }
+    if (patch.ok !== undefined) {
+      if (patch.ok === null) delete label.ok;
+      else label.ok = patch.ok;
+    }
+    const { label: _, ...rest } = old;
+    this.records[i] = Object.keys(label).length ? { ...rest, label } : rest;
+    this.save(this.records, []);
   }
 
   clear(): VoiceRecord[] {

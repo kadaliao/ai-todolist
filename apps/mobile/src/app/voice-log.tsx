@@ -2,8 +2,8 @@ import { summarize, type VoiceRecord } from '@ai-todo/core';
 import { type MessageKey, t } from '@ai-todo/shared';
 import { router } from 'expo-router';
 import { Play } from 'lucide-react-native';
-import { useMemo } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Txt } from '../components/ui';
 import {
@@ -79,6 +79,18 @@ export default function VoiceLogScreen() {
                 : '—'
             }
           />
+          <Stat
+            label={t('voiceLog.judged')}
+            value={
+              summary.judged || summary.misheard
+                ? t('voiceLog.judgedValue', {
+                    right: summary.right,
+                    judged: summary.judged,
+                    misheard: summary.misheard,
+                  })
+                : '—'
+            }
+          />
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
             <Btn
               label={t('voiceLog.export')}
@@ -88,11 +100,9 @@ export default function VoiceLogScreen() {
             <Btn label={t('voiceLog.clear')} onPress={clear} disabled={!records.length} danger />
           </View>
         </View>
-        {!recent.length ? (
-          <Txt variant="meta" style={[styles.help, { marginTop: 12 }]}>
-            {t('voiceLog.empty')}
-          </Txt>
-        ) : null}
+        <Txt variant="meta" style={[styles.help, { marginTop: 6 }]}>
+          {recent.length ? t('voiceLog.labelHelp') : t('voiceLog.empty')}
+        </Txt>
         {recent.map((r) => (
           <Entry key={r.id} record={r} />
         ))}
@@ -136,6 +146,8 @@ function Btn({
 
 function Entry({ record: r }: { record: VoiceRecord }) {
   const c = useColors();
+  const [open, setOpen] = useState(false);
+  const [said, setSaid] = useState(r.label?.said ?? r.heard);
   const d = new Date(r.at);
   const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(
     d.getMinutes(),
@@ -147,18 +159,31 @@ function Entry({ record: r }: { record: VoiceRecord }) {
       : t('voiceLog.system');
   const ms = r.firstChangeMs ?? r.doneMs;
   const audio = r.capture?.audio ? audioFile(r.capture.audio) : null;
-  const bad = r.status === 'undone' || r.status === 'error';
+  const bad =
+    r.label?.ok === false || (r.label?.ok === undefined && (r.status === 'undone' || r.status === 'error'));
   const meta = [
     when,
     how,
     t(`voiceLog.status.${r.status}` as MessageKey),
     ms !== undefined ? t('voiceLog.seconds', { s: (ms / 1000).toFixed(1) }) : '',
+    r.label?.ok === true
+      ? `✓ ${t('voiceLog.right')}`
+      : r.label?.ok === false
+        ? `✗ ${t('voiceLog.wrong')}`
+        : '',
+    r.label?.said ? t('voiceLog.misheard') : '',
   ]
     .filter(Boolean)
     .join(' · ');
   const misheard = r.capture?.system && r.capture.system !== r.heard ? r.capture.system : '';
+  const judge = (ok: boolean) => getJournal().label(r.id, { ok: r.label?.ok === ok ? null : ok });
   return (
-    <View style={[styles.entry, { backgroundColor: c.surface, borderColor: bad ? c.p1 : c.line }]}>
+    <Pressable
+      onPress={() => setOpen((o) => !o)}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      style={[styles.entry, { backgroundColor: c.surface, borderColor: bad ? c.p1 : c.line }]}
+    >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <Txt variant="meta" style={{ flex: 1 }} tone={bad ? c.p1 : undefined}>
           {meta}
@@ -185,11 +210,55 @@ function Entry({ record: r }: { record: VoiceRecord }) {
         </Txt>
       ) : null}
       {r.reply || r.error ? (
-        <Txt variant="meta" tone={c.ink2} numberOfLines={3}>
+        <Txt variant="meta" tone={c.ink2} numberOfLines={open ? undefined : 3}>
           {r.error ?? r.reply}
         </Txt>
       ) : null}
-    </View>
+      {r.label?.said && !open ? (
+        <Txt variant="meta" tone={c.jade}>
+          {t('voiceLog.said')}：{r.label.said}
+        </Txt>
+      ) : null}
+      {open ? (
+        <View style={{ gap: 8, marginTop: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Choice
+              label={`✓ ${t('voiceLog.right')}`}
+              on={r.label?.ok === true}
+              onPress={() => judge(true)}
+            />
+            <Choice
+              label={`✗ ${t('voiceLog.wrong')}`}
+              on={r.label?.ok === false}
+              onPress={() => judge(false)}
+            />
+          </View>
+          <Txt variant="meta">{t('voiceLog.said')}</Txt>
+          <TextInput
+            value={said}
+            onChangeText={setSaid}
+            onEndEditing={() => getJournal().label(r.id, { said })}
+            multiline
+            accessibilityLabel={t('voiceLog.said')}
+            style={[styles.said, { color: c.ink, borderColor: c.line, backgroundColor: c.bg }]}
+          />
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function Choice({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: on }}
+      style={[styles.btn, { backgroundColor: on ? c.jade : c.hover }]}
+    >
+      <Txt style={{ color: on ? c.jadeInk : c.ink, fontWeight: '600', fontSize: 15 }}>{label}</Txt>
+    </Pressable>
   );
 }
 
@@ -225,4 +294,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   entry: { padding: 14, gap: 4, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  said: {
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+  },
 });
