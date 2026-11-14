@@ -58,9 +58,13 @@ export class Store {
   /** Bumped on every effective change; cheap change detection for UI subscriptions. */
   version = 0;
 
-  /** Applies an op. Returns `true` if it changed the stored state. */
+  /**
+   * Applies an op. Returns `true` if it changed the stored state. Ops for entity types this
+   * version doesn't know (from a newer app) are skipped rather than breaking sync.
+   */
   apply(op: Op): boolean {
-    const table = this.table(op.entity);
+    const table = this.tables.get(op.entity);
+    if (!table) return false;
     let row = table.get(op.entityId);
     if (!row) {
       row = new Map();

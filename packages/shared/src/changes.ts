@@ -1,5 +1,5 @@
 import type { Change, LocalDate, ReadStore, Task } from '@ai-todo/core';
-import { describeRecurrence, formatScheduled } from './dates';
+import { describeRecurrence, formatDay, formatScheduled } from './dates';
 import { t } from './i18n';
 
 /**
@@ -51,6 +51,10 @@ function updatedDetail(store: ReadStore, c: Extract<Change, { entity: 'task' }>,
     else out.push(`→ ${formatScheduled(a.scheduled, today)}`);
   }
   if (f.has('repeat')) out.push(a.recurrence ? describeRecurrence(a.recurrence) : t('change.noRepeat'));
+  if (f.has('deadline'))
+    out.push(
+      a.deadline ? t('change.deadline', { day: formatDay(a.deadline, today) }) : t('change.noDeadline'),
+    );
   if (f.has('project') || f.has('section')) {
     const p = a.projectId ? store.get('project', a.projectId)?.name : t('change.inbox');
     const s = a.sectionId ? store.get('section', a.sectionId)?.name : null;
@@ -90,6 +94,32 @@ export function describeChanges(changes: Change[], store: ReadStore, today: Loca
   }
   const lines: ChangeLine[] = [];
   for (const c of changes) {
+    if (c.entity === 'memory') {
+      if (c.kind === 'updated') continue;
+      lines.push({
+        key: `memory:${c.id}`,
+        kind: c.kind,
+        entity: c.entity,
+        title: c.name,
+        detail: t(c.kind === 'added' ? 'change.remembered' : 'change.forgot'),
+      });
+      continue;
+    }
+    if (c.entity === 'setting') {
+      if (c.id !== 'dayParts') continue;
+      const v = (c.value ?? {}) as Record<string, string>;
+      const parts = (['morning', 'noon', 'afternoon', 'evening'] as const).map(
+        (k) => `${t(`dayParts.${k}`)} ${v[k] ?? ''}`,
+      );
+      lines.push({
+        key: `setting:${c.id}`,
+        kind: c.kind,
+        entity: c.entity,
+        title: t('change.dayParts'),
+        detail: parts.join(' · '),
+      });
+      continue;
+    }
     if (c.entity !== 'task') {
       if (c.kind !== 'added') continue;
       const key =
@@ -118,7 +148,11 @@ export function describeChanges(changes: Change[], store: ReadStore, today: Loca
     const task = (c.after ?? c.before) as Task;
     const parts: string[] = [];
     if (c.kind === 'added') {
-      parts.push(when(task, today), where(store, task));
+      parts.push(
+        when(task, today),
+        task.deadline ? t('change.deadline', { day: formatDay(task.deadline, today) }) : '',
+        where(store, task),
+      );
       if (task.parentId) {
         const p = store.get('task', task.parentId);
         if (p) parts.push(`↳ ${p.title}`);

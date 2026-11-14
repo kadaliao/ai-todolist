@@ -1,8 +1,9 @@
+import type { DayParts } from '../model';
 import { sortByOrder } from '../order';
 import type { ReadStore } from '../overlay';
 import type { Replica } from '../replica';
 import { addDays, isoWeekday, wallClock } from '../time';
-import { inbox as inboxView, subtasks, today as todayView, upcoming } from '../views';
+import { dayParts, inbox as inboxView, memories, subtasks, today as todayView, upcoming } from '../views';
 import { AgentSession, type Change } from './session';
 import { AGENT_TOOLS, briefTask, executeTool, type TaskBrief, type ToolEnv } from './tools';
 
@@ -58,6 +59,10 @@ export interface AgentContext {
   view?: string;
   /** Names and words the user often says (their vocabulary setting), spelled the way they want. */
   words?: string[];
+  /** What the user asked the assistant to remember. */
+  memory?: string[];
+  /** The times bare 早上/中午/下午/晚上 stand for. */
+  dayParts?: DayParts;
 }
 
 export interface AgentRequest {
@@ -144,6 +149,11 @@ export function agentContext(
       : {}),
     ...(opts.view ? { view: opts.view } : {}),
     ...(opts.words?.length ? { words: opts.words.slice(0, 100) } : {}),
+    ...(() => {
+      const m = memories(store).map((x) => x.text);
+      return m.length ? { memory: m.slice(-50) } : {};
+    })(),
+    dayParts: dayParts(store),
   };
 }
 
@@ -163,6 +173,8 @@ export interface AssistantTurn {
   error?: string;
   /** What the user said to confirm or cancel this turn's proposal (“好”, “算了”). */
   answer?: string;
+  /** The assistant asked a question; these are answers the user can tap. */
+  options?: string[];
   /** When the turn started (the clock given to the assistant), and how it went from there. */
   startedAt: number;
   /** Model calls made. */
@@ -317,6 +329,7 @@ export class Assistant {
   private async runSteps(turn: AssistantTurn, signal: AbortSignal): Promise<void> {
     const steps = this.opts.maxSteps ?? 8;
     const allowed = AGENT_TOOLS;
+    let asked = false;
     // The list as it was when the user spoke. Re-reading it after each step would show the
     // model its own staged edits as if they had always been there, which confuses it.
     const context = this.context();
@@ -347,6 +360,16 @@ export class Assistant {
       let replied = '';
       const results: ToolResult[] = calls.map((call) => {
         turn.tools.push(call.name);
+        if (call.name === 'ask-user') {
+          const q = call.input as { question?: unknown; options?: unknown } | null;
+          if (typeof q?.question === 'string' && q.question.trim()) {
+            asked = true;
+            if (!text.trim()) turn.reply = before ? `${before}\n${q.question.trim()}` : q.question.trim();
+            if (Array.isArray(q.options)) {
+              turn.options = q.options.filter((o): o is string => typeof o === 'string' && !!o.trim());
+            }
+          }
+        }
         const said = (call.input as { reply?: unknown } | null)?.reply;
         if (typeof said === 'string' && said.trim()) replied = said.trim();
         const point = this.session.checkpoint();
@@ -370,6 +393,8 @@ export class Assistant {
       if (turn.changes.length && turn.firstChangeMs === undefined)
         turn.firstChangeMs = this.now() - turn.startedAt;
       this.emit(true);
+      // A question ends the turn; the user's answer is the next message.
+      if (asked) return;
       if (wrote && (text.trim() || replied)) {
         // The model replied alongside its edits, as text or as a write call's `reply` argument.
         // If they all worked and nothing waits for a yes, the turn is done: no second round trip

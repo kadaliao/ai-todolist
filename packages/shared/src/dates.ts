@@ -56,6 +56,20 @@ export function formatScheduled(s: Scheduled, today: LocalDate): string {
   return s.time ? `${day} ${formatTime(s.time)}` : day;
 }
 
+/** “周五截止” / “Due Fri”, or “已过截止（周三）” once it has passed. */
+export function formatDeadline(date: LocalDate, today: LocalDate): string {
+  return date < today
+    ? t('deadline.overdue', { day: formatDay(date, today) })
+    : t('deadline.due', { day: formatDay(date, today) });
+}
+
+/** How urgent a deadline looks: passed, today, within three days, or later. */
+export function deadlineTone(date: LocalDate, today: LocalDate): 'overdue' | 'today' | 'soon' | 'later' {
+  if (date < today) return 'overdue';
+  if (date === today) return 'today';
+  return daysBetween(today, date) <= 3 ? 'soon' : 'later';
+}
+
 export function dateTone(s: Scheduled | null, today: LocalDate): 'overdue' | 'today' | 'soon' | 'later' {
   if (!s) return 'later';
   if (s.date < today) return 'overdue';

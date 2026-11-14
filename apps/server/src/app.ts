@@ -1,4 +1,4 @@
-import { type AgentContext, type AgentMessage, decodeHlc, type Op } from '@ai-todo/core';
+import { type AgentContext, type AgentMessage, decodeHlc, type Op, SYNC_SCHEMA } from '@ai-todo/core';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -73,6 +73,7 @@ export function createApp(opts: {
       ok: true,
       device: c.get('device').name,
       cursor: db.maxSeq(),
+      schema: SYNC_SCHEMA,
       ai: ai
         ? { available: true, model: ai.model, agent: true, speech: !!stt }
         : { available: false, speech: !!stt },
@@ -96,7 +97,8 @@ export function createApp(opts: {
   app.get('/api/sync/pull', (c) => {
     const since = Math.max(0, Number(c.req.query('since') ?? 0) || 0);
     const limit = Math.min(5000, Math.max(1, Number(c.req.query('limit') ?? 2000) || 2000));
-    return c.json(hub.pull(since, limit, c.req.query('device') || undefined));
+    const schema = Number(c.req.query('schema') ?? 1) || 1;
+    return c.json(hub.pull(since, limit, c.req.query('device') || undefined, schema));
   });
 
   if (opts.upgradeWebSocket) {

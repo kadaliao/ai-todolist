@@ -81,7 +81,11 @@ describe('assistant turns', () => {
     const call1 = open(r).find((t) => t.title === '给张三打电话');
     expect(call1?.scheduled).toEqual({ date: '2026-11-14', time: '09:00' });
     expect(call1?.origin).toBe('ai');
-    expect(open(r).find((t) => t.title === '交房租')?.scheduled?.date).toBe('2026-11-13');
+    // “之前” makes it a deadline, not a planned day.
+    expect(open(r).find((t) => t.title === '交房租')).toMatchObject({
+      scheduled: null,
+      deadline: '2026-11-13',
+    });
     // The second request carries the tool results back to the model.
     expect(transport.requests[1]?.messages.at(-1)).toMatchObject({ role: 'tool' });
 
@@ -266,6 +270,62 @@ describe('assistant turns', () => {
     expect(a.getState().turns.map((t) => t.status)).toEqual(['undone', 'answered']);
   });
 
+  it('asks instead of guessing; the options can be tapped as the answer', async () => {
+    const { r, a, transport } = setup([
+      () => [
+        call('ask-user', {
+          question: '是“给张三打电话”还是“给张三发合同”？',
+          options: ['给张三打电话', '给张三发合同'],
+        }),
+      ],
+      (req) => [call('complete-tasks', { ids: [refOf(req, '给张三打电话')], reply: '打电话那条完成了。' })],
+    ]);
+    r.dispatch(createTasks([{ title: '给张三打电话' }, { title: '给张三发合同' }]));
+    await a.say('张三那个做完了');
+    // One model call: the question ends the turn.
+    expect(transport.requests).toHaveLength(1);
+    expect(a.getState().turns.at(-1)).toMatchObject({
+      status: 'answered',
+      reply: '是“给张三打电话”还是“给张三发合同”？',
+      options: ['给张三打电话', '给张三发合同'],
+    });
+    expect(open(r)).toHaveLength(2);
+    await a.say('给张三打电话');
+    // The question and its (empty) result stay in the conversation.
+    expect(transport.requests[1]?.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'user']);
+    expect(open(r).map((t) => t.title)).toEqual(['给张三发合同']);
+  });
+
+  it('remembers things across turns and sends them as context', async () => {
+    const { r, a, transport } = setup([
+      () => [call('remember', { text: '健身相关的放到生活项目', reply: '记住了。' })],
+      () => [say('好')],
+    ]);
+    await a.say('记住 以后健身相关的都放到生活项目');
+    const turn = a.getState().turns.at(-1);
+    expect(turn).toMatchObject({ status: 'applied', reply: '记住了。' });
+    expect(turn?.changes).toMatchObject([
+      { entity: 'memory', kind: 'added', name: '健身相关的放到生活项目' },
+    ]);
+    expect(r.store.all('memory').map((m) => m.text)).toEqual(['健身相关的放到生活项目']);
+    await a.say('hi');
+    expect(transport.requests[1]?.context.memory).toEqual(['健身相关的放到生活项目']);
+    a.undo(turn?.id);
+    expect(r.store.all('memory')).toHaveLength(0);
+  });
+
+  it('day-part preferences change how bare 早上 is read', async () => {
+    const { r, a } = setup([
+      () => [call('set-preferences', { morning: '7:30', reply: '好，以后早上按七点半。' })],
+      () => [call('add-tasks', { tasks: [{ title: '跑步', when: '明天早上' }], reply: '加了。' })],
+    ]);
+    await a.say('我说早上一般是七点半');
+    await a.say('明天早上跑步');
+    expect(open(r)[0]?.scheduled).toEqual({ date: '2026-11-14', time: '07:30' });
+    // Forgetting a memory or changing a preference never waits for a yes.
+    expect(a.getState().turns.map((t) => t.status)).toEqual(['applied', 'applied']);
+  });
+
   it('forgets the conversation after a quiet period', async () => {
     const { a, transport, c } = setup([() => [say('1')], () => [say('2')]]);
     await a.say('one');
@@ -356,6 +416,94 @@ describe('tools on a staged session', () => {
     expect(out.error).toBe(true);
     expect(String(out.output)).toMatch(/Invalid input/);
     expect(executeTool(env(r, s), 'nope', {}).error).toBe(true);
+  });
+
+  it('deadlines are separate from the planned day', () => {
+    const r = replica('d', clock(NOW));
+    const s = new AgentSession(r);
+    const e = env(r, s);
+    executeTool(e, 'add-tasks', {
+      tasks: [
+        { title: '写方案', when: '明天', deadline: '下周三' },
+        { title: '交房租', deadline: '月底' },
+      ],
+    });
+    const [a1, b1] = s.store.all('task');
+    expect(a1).toMatchObject({ scheduled: { date: '2026-11-14' }, deadline: '2026-11-18' });
+    expect(b1).toMatchObject({ scheduled: null, deadline: '2026-11-30' });
+    executeTool(e, 'update-tasks', { tasks: [{ id: b1?.id, deadline: null }] });
+    expect(s.store.get('task', b1?.id as string)?.deadline).toBeNull();
+    // “改到周五之前” on `when` sets the deadline and keeps the planned day.
+    executeTool(e, 'update-tasks', { tasks: [{ id: a1?.id, when: '周五之前' }] });
+    expect(s.store.get('task', a1?.id as string)).toMatchObject({
+      scheduled: { date: '2026-11-14' },
+      deadline: '2026-11-13',
+    });
+  });
+
+  it('find-tasks filters groups of tasks', () => {
+    const r = replica('d', clock(NOW));
+    const { result: work } = r.dispatch(createProject({ name: '工作' }));
+    r.dispatch(
+      createTasks([
+        { title: 'a', projectId: work },
+        { title: 'b', projectId: work, scheduled: { date: '2026-11-20' } },
+        { title: 'c', projectId: work, priority: 3 },
+        { title: 'd', scheduled: { date: '2026-11-10' } },
+        { title: 'e', deadline: '2026-11-16' },
+      ]),
+    );
+    const s = new AgentSession(r);
+    const find = (input: object) =>
+      (executeTool(env(r, s), 'find-tasks', input).output as { tasks: { title: string }[] }).tasks
+        .map((t) => t.title)
+        .sort();
+    expect(find({ project: '工作', date: 'none' })).toEqual(['a', 'c']);
+    expect(find({ date: 'overdue' })).toEqual(['d']);
+    expect(find({ date: 'future' })).toEqual(['b']);
+    expect(find({ priority: 'p1' })).toEqual(['c']);
+    expect(find({ deadline: '下周一' })).toEqual(['e']);
+    expect(find({ deadline: '周五' })).toEqual([]);
+  });
+
+  it('review-period sums up what got done', () => {
+    const c = clock(NOW);
+    const r = replica('d', c);
+    const { result: ids } = r.dispatch(
+      createTasks([{ title: '周报' }, { title: '买菜' }, { title: '还没做' }]),
+    );
+    r.dispatch(completeTask(ids[0] as string));
+    c.advance(-3 * 86_400_000); // Tuesday
+    r.dispatch(completeTask(ids[1] as string));
+    c.set(NOW);
+    const s = new AgentSession(r);
+    const out = executeTool(env(r, s), 'review-period', { period: 'this-week' }).output as {
+      from: string;
+      completedCount: number;
+      completed: { date: string; title: string }[];
+    };
+    expect(out.from).toBe('2026-11-09');
+    expect(out.completedCount).toBe(2);
+    expect(out.completed.map((x) => [x.date, x.title])).toEqual([
+      ['2026-11-10', '买菜'],
+      ['2026-11-13', '周报'],
+    ]);
+    const lastWeek = executeTool(env(r, s), 'review-period', { period: 'last-week' }).output as {
+      completedCount: number;
+    };
+    expect(lastWeek.completedCount).toBe(0);
+  });
+
+  it('forget drops matching memories', () => {
+    const r = replica('d', clock(NOW));
+    const s = new AgentSession(r);
+    executeTool(env(r, s), 'remember', { text: '张三是我老板' });
+    executeTool(env(r, s), 'remember', { text: '张三是我老板' });
+    expect(s.store.all('memory')).toHaveLength(1);
+    expect(executeTool(env(r, s), 'forget', { text: '李四' }).error).toBe(true);
+    executeTool(env(r, s), 'forget', { text: '张三' });
+    expect(s.store.all('memory').filter((m) => !m.deletedAt)).toHaveLength(0);
+    expect(s.needsConfirmation()).toBe(false);
   });
 
   it('commits a whole session as one transaction', () => {

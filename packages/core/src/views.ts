@@ -1,7 +1,16 @@
-import type { Completion, Label, Project, Section, Task } from './model';
+import {
+  type Completion,
+  type DayParts,
+  DEFAULT_DAY_PARTS,
+  type Label,
+  type Memory,
+  type Project,
+  type Section,
+  type Task,
+} from './model';
 import { compareOrder, sortByOrder } from './order';
 import type { ReadStore } from './overlay';
-import { addDays, compareDates, type LocalDate } from './time';
+import { addDays, compareDates, isLocalTime, type LocalDate } from './time';
 
 /**
  * Read models for the standard views. Everything is in memory, so these are plain functions
@@ -19,12 +28,33 @@ function activeProjectIds(store: ReadStore): Set<string> {
   );
 }
 
-/** Tasks visible in date-based views: open, top-level or not, in Inbox or an active project. */
+/**
+ * Tasks visible in date-based views: open, with a date or a deadline, top-level or not, in Inbox
+ * or an active project.
+ */
 function datedOpenTasks(store: ReadStore): Task[] {
   const active = activeProjectIds(store);
   return store
     .all('task')
-    .filter((t) => isOpen(t) && t.scheduled && (t.projectId === null || active.has(t.projectId)));
+    .filter(
+      (t) => isOpen(t) && (t.scheduled || t.deadline) && (t.projectId === null || active.has(t.projectId)),
+    );
+}
+
+/**
+ * The day a task is listed under: its scheduled date, or its deadline when it has none. A task
+ * whose deadline comes before its date is listed on the deadline.
+ */
+export function listedDate(t: Task): LocalDate | null {
+  const d = t.scheduled?.date ?? null;
+  if (!t.deadline) return d;
+  return !d || compareDates(t.deadline, d) < 0 ? t.deadline : d;
+}
+
+/** Open and past its listed day (date or deadline). */
+export function isOverdue(t: Task, day: LocalDate): boolean {
+  const d = t.scheduled?.date ?? t.deadline;
+  return !!d && compareDates(d, day) < 0;
 }
 
 /** Time-of-day first (untimed last), then priority, then manual order. */
@@ -46,24 +76,35 @@ export function inbox(store: ReadStore): Task[] {
   );
 }
 
+/**
+ * Today: tasks scheduled for today, plus tasks due today or with a missed deadline even if they
+ * are planned for later. Overdue: the scheduled date has passed, or, without one, the deadline.
+ */
 export function today(store: ReadStore, day: LocalDate): { overdue: Task[]; today: Task[] } {
   const tasks = datedOpenTasks(store);
-  const overdue = tasks.filter((t) => compareDates((t.scheduled as { date: string }).date, day) < 0);
-  const todays = tasks.filter((t) => t.scheduled?.date === day);
-  overdue.sort(
-    (a, b) => compareDates(a.scheduled?.date ?? '', b.scheduled?.date ?? '') || compareForDay(a, b),
+  const overdue = tasks.filter((t) => isOverdue(t, day));
+  const todays = tasks.filter(
+    (t) =>
+      !isOverdue(t, day) &&
+      ((t.scheduled ? t.scheduled.date === day : t.deadline === day) ||
+        (!!t.deadline && compareDates(t.deadline, day) <= 0)),
   );
+  const key = (t: Task) => t.scheduled?.date ?? t.deadline ?? '';
+  overdue.sort((a, b) => compareDates(key(a), key(b)) || compareForDay(a, b));
   todays.sort(compareForDay);
   return { overdue, today: todays };
 }
 
-/** Next `days` days starting at `from` (inclusive), one bucket per day, empty days included. */
+/**
+ * Next `days` days starting at `from` (inclusive), one bucket per day, empty days included. Each
+ * task is listed once, on {@link listedDate}.
+ */
 export function upcoming(store: ReadStore, from: LocalDate, days = 14): { date: LocalDate; tasks: Task[] }[] {
   const end = addDays(from, days);
   const buckets = new Map<LocalDate, Task[]>();
   for (let i = 0; i < days; i++) buckets.set(addDays(from, i), []);
   for (const t of datedOpenTasks(store)) {
-    const d = t.scheduled?.date as string;
+    const d = listedDate(t) as string;
     if (compareDates(d, from) >= 0 && compareDates(d, end) < 0) buckets.get(d)?.push(t);
   }
   return [...buckets].map(([date, tasks]) => ({ date, tasks: tasks.sort(compareForDay) }));
@@ -165,4 +206,27 @@ export function search(store: ReadStore, query: string, limit = 50): Task[] {
 
 export function labelTasks(store: ReadStore, labelId: string): Task[] {
   return sortByOrder(store.all('task').filter((t) => isOpen(t) && t.labels.includes(labelId)));
+}
+
+/** What the assistant remembers, oldest first. */
+export function memories(store: ReadStore): Memory[] {
+  return store
+    .all('memory')
+    .filter((m) => !m.deletedAt && m.text.trim())
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1));
+}
+
+export const DAY_PARTS_KEY = 'dayParts';
+
+/** Day-part times, with the defaults filled in for any the user hasn't set. */
+export function dayParts(store: ReadStore): DayParts {
+  const v = store.get('setting', DAY_PARTS_KEY)?.value as Partial<DayParts> | null | undefined;
+  const out = { ...DEFAULT_DAY_PARTS };
+  if (v && typeof v === 'object') {
+    for (const k of Object.keys(out) as (keyof DayParts)[]) {
+      const x = v[k];
+      if (typeof x === 'string' && isLocalTime(x)) out[k] = x;
+    }
+  }
+  return out;
 }

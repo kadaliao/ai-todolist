@@ -173,6 +173,15 @@ export function matchDate(
   ) {
     date = todayStr;
   }
+  // chrono zh puts “周六下午” (weekday + day part, no clock time) on today; trust the weekday.
+  const named = /(下)?个?(?:周|星期|礼拜)([一二三四五六日天])/.exec(r.text);
+  if (named) {
+    const want = '一二三四五六'.indexOf(named[2] as string) + 1 || 7;
+    if (isoWeekday(date) !== want) {
+      const wd = isoWeekday(todayStr);
+      date = named[1] ? addDays(todayStr, 7 - wd + want) : addDays(todayStr, (want - wd + 7) % 7);
+    }
+  }
   let time: LocalTime | undefined;
   let duration: number | undefined;
   if (r.start.isCertain('hour')) {

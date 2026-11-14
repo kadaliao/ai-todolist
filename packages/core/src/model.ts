@@ -4,11 +4,11 @@ import type { LocalDate, LocalTime } from './time';
  * Domain model. Every entity is stored as a bag of independently-versioned fields (see
  * `sync/store.ts`), so these interfaces describe the *materialized* shape with defaults applied.
  *
- * Fields reserved for v2 (deadline, duration, reminders) are part of the model from day one so
- * enabling them later needs no data migration.
+ * `duration` is reserved for time blocking; it is part of the model so enabling it later needs no
+ * data migration.
  */
 
-export type EntityType = 'task' | 'project' | 'section' | 'label' | 'completion';
+export type EntityType = 'task' | 'project' | 'section' | 'label' | 'completion' | 'memory' | 'setting';
 
 /** Who caused a change. Lets the UI show/undo AI edits separately. */
 export type Actor = 'user' | 'ai' | 'mcp' | 'system';
@@ -57,7 +57,7 @@ export interface Task {
   /** Label ids. */
   labels: string[];
   scheduled: Scheduled | null;
-  /** v2: hard deadline, separate from when you plan to do it (Things' When vs Deadline). */
+  /** Hard deadline, separate from when you plan to do it (Things' When vs Deadline). */
   deadline: LocalDate | null;
   recurrence: Recurrence | null;
   reminders: Reminder[];
@@ -111,15 +111,64 @@ export interface Completion {
   createdAt: string;
 }
 
+/** Something the assistant was asked to remember (“张三是我老板”, “健身的事放生活”). */
+export interface Memory {
+  id: string;
+  text: string;
+  deletedAt: string | null;
+  createdAt: string;
+  origin: Actor;
+}
+
+/**
+ * A synced preference; the id is its key. Device-only settings (sync server, theme) live in each
+ * app's own storage instead.
+ */
+export interface Setting {
+  id: string;
+  value: unknown;
+  createdAt: string;
+}
+
+/** Times that bare day-part words stand for: “明天早上” → morning. */
+export interface DayParts {
+  morning: string;
+  noon: string;
+  afternoon: string;
+  evening: string;
+}
+
+export const DEFAULT_DAY_PARTS: DayParts = {
+  morning: '09:00',
+  noon: '12:00',
+  afternoon: '15:00',
+  evening: '20:00',
+};
+
 export interface EntityMap {
   task: Task;
   project: Project;
   section: Section;
   label: Label;
   completion: Completion;
+  memory: Memory;
+  setting: Setting;
 }
 
-export const ENTITY_TYPES: readonly EntityType[] = ['task', 'project', 'section', 'label', 'completion'];
+/**
+ * The types servers and clients before schema 2 know. Older apps throw on anything else, so the
+ * server leaves newer types out of their pulls and new apps hold them back from older servers.
+ */
+export const LEGACY_ENTITY_TYPES: readonly EntityType[] = [
+  'task',
+  'project',
+  'section',
+  'label',
+  'completion',
+];
+export const ENTITY_TYPES: readonly EntityType[] = [...LEGACY_ENTITY_TYPES, 'memory', 'setting'];
+/** Sync schema: 2 added `memory` and `setting`. */
+export const SYNC_SCHEMA = 2;
 
 /** Defaults for fields that may be absent in storage. `id`/`createdAt` always exist. */
 export const DEFAULTS: { [K in EntityType]: Partial<EntityMap[K]> } = {
@@ -144,4 +193,6 @@ export const DEFAULTS: { [K in EntityType]: Partial<EntityMap[K]> } = {
   section: { name: '', sortKey: 'a0', deletedAt: null },
   label: { name: '', color: null, sortKey: 'a0', deletedAt: null },
   completion: { projectId: null, occurrence: null, deletedAt: null },
+  memory: { text: '', deletedAt: null, origin: 'user' },
+  setting: { value: null },
 };

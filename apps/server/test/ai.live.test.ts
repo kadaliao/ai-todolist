@@ -26,10 +26,15 @@ const ctx: AiContext = {
   labels: ['重要', '家里'],
 };
 
-function dateOf(when: string | undefined): { date?: string; time?: string; rule?: string } {
+function dateOf(when: string | undefined): {
+  date?: string;
+  time?: string;
+  rule?: string;
+  deadline?: string;
+} {
   if (!when) return {};
   const r = parseQuickAdd(when, { now: new Date(), timeZone: tz });
-  return { date: r.scheduled?.date, time: r.scheduled?.time, rule: r.recurrence?.rule };
+  return { date: r.scheduled?.date, time: r.scheduled?.time, rule: r.recurrence?.rule, deadline: r.deadline };
 }
 
 interface Expect {
@@ -37,6 +42,7 @@ interface Expect {
   date?: string;
   time?: string;
   rule?: string;
+  deadline?: string;
   project?: string;
 }
 
@@ -47,7 +53,7 @@ const cases: { name: string; text: string; expect: Expect[] }[] = [
     expect: [
       { title: /周报/, date: addDays(today, 1) },
       { title: /评审/, date: addDays(today, 1), time: '15:00' },
-      { title: /房租/, date: nextWeekday(5) },
+      { title: /房租/, deadline: nextWeekday(5) },
       { title: /健身/, rule: 'FREQ=WEEKLY;BYDAY=MO' },
     ],
   },
@@ -96,6 +102,7 @@ live('AI extraction (live model)', () => {
         if (e.date) expect(got?.date).toBe(e.date);
         if (e.time) expect(got?.time).toBe(e.time);
         if (e.rule) expect(got?.rule).toBe(e.rule);
+        if (e.deadline) expect(got?.deadline).toBe(e.deadline);
         if (e.project) expect(got?.project).toBe(e.project);
       });
     });

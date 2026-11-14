@@ -82,7 +82,7 @@ live('voice assistant (live model)', { timeout: 90_000 }, () => {
     expect(last()?.status).toBe('applied');
     expect(open()).toHaveLength(2);
     expect(byTitle(/张三/).scheduled).toEqual({ date: addDays(today, 1), time: '09:00' });
-    expect(byTitle(/房租/).scheduled?.date).toBeTruthy();
+    expect(byTitle(/房租/).deadline).toBeTruthy();
     console.log('  →', last()?.reply);
   });
 

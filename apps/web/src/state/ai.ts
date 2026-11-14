@@ -1,4 +1,4 @@
-import { type NewTask, parseQuickAdd, type Replica, sortByOrder } from '@ai-todo/core';
+import { dayParts, type NewTask, parseQuickAdd, type Replica, sortByOrder } from '@ai-todo/core';
 import { t } from '@ai-todo/shared';
 import { timeZone } from './replica';
 import { useSyncStore } from './sync';
@@ -113,7 +113,9 @@ export function draftToTask(replica: Replica, d: ExtractedTask): NewTask & { pro
   const s = replica.store;
   const projects = s.all('project').filter((p) => !p.deletedAt && !p.archivedAt);
   const labels = s.all('label').filter((l) => !l.deletedAt);
-  const parsed = d.when ? parseQuickAdd(d.when, { now: new Date(), timeZone: timeZone() }) : null;
+  const parsed = d.when
+    ? parseQuickAdd(d.when, { now: new Date(), timeZone: timeZone(), dayParts: dayParts(s) })
+    : null;
   const project = d.project
     ? projects.find((p) => p.name.toLowerCase() === d.project?.toLowerCase())
     : undefined;
@@ -128,5 +130,6 @@ export function draftToTask(replica: Replica, d: ExtractedTask): NewTask & { pro
     ...(d.priority ? { priority: (4 - d.priority) as 0 | 1 | 2 | 3 } : {}),
     ...(parsed?.scheduled ? { scheduled: parsed.scheduled } : {}),
     ...(parsed?.recurrence ? { recurrence: parsed.recurrence } : {}),
+    ...(parsed?.deadline ? { deadline: parsed.deadline } : {}),
   };
 }

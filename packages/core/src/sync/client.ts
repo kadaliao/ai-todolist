@@ -1,16 +1,22 @@
+import { LEGACY_ENTITY_TYPES, SYNC_SCHEMA } from '../model';
 import type { Replica } from '../replica';
 import type { Op } from './store';
 
 /**
  * Sync client for docket-server, shared by the web/desktop app and the phone app.
  *
- *   POST /api/sync/push   { ops }            → { acked: hlc[], cursor }
- *   GET  /api/sync/pull?since=&device=       → { ops, cursor, more }
+ *   POST /api/sync/push   { ops }                    → { acked: hlc[], cursor }
+ *   GET  /api/sync/pull?since=&device=&schema=2    → { ops, cursor, more, schema }
  *   WS   /api/sync/ws?token=                 ← { type: 'changed', cursor }
  *
  * Local edits are pushed shortly after they happen; the socket says when to pull; a slow poll
  * covers missed messages. Merging is the replica's job (field-level LWW), so retries and
  * duplicates are harmless. Platform specifics (storage, connectivity) are injected.
+ *
+ * Schema: a server that answers a pull with `schema >= 2` takes memory and setting ops; until
+ * one does, those stay in the outbox (an older server would reject the whole push). The cursor
+ * key carries the schema so an app upgraded from 1.x pulls everything once, including what the
+ * server left out of its pulls while it was old.
  */
 
 export type SyncState = 'connecting' | 'synced' | 'offline' | 'error';
@@ -49,6 +55,8 @@ export class SyncClient {
   private pollTimer: ReturnType<typeof setInterval> | undefined;
   private retry = 0;
   private cursor = 0;
+  /** What the server said it supports; 1 until a pull says otherwise. */
+  private serverSchema = 1;
   private stopped = false;
   private paused = false;
   private pulling = false;
@@ -63,7 +71,7 @@ export class SyncClient {
   }
 
   private get cursorKey(): string {
-    return `sync.cursor:${this.base}`;
+    return `sync.cursor.v${SYNC_SCHEMA}:${this.base}`;
   }
 
   private headers(): Record<string, string> {
@@ -140,7 +148,7 @@ export class SyncClient {
 
   private async push(): Promise<void> {
     if (this.pushing || this.stopped) return;
-    const ops = this.opts.replica.pending();
+    const ops = this.sendable();
     if (!ops.length) return;
     this.pushing = true;
     try {
@@ -161,7 +169,14 @@ export class SyncClient {
     } finally {
       this.pushing = false;
     }
-    if (this.opts.replica.pending().length) this.schedulePush();
+    if (this.sendable().length) this.schedulePush();
+  }
+
+  private sendable(): Op[] {
+    const ops = this.opts.replica.pending();
+    if (this.serverSchema >= SYNC_SCHEMA) return ops;
+    const legacy = new Set<string>(LEGACY_ENTITY_TYPES);
+    return ops.filter((o) => legacy.has(o.entity));
   }
 
   private async pull(): Promise<void> {
@@ -170,11 +185,16 @@ export class SyncClient {
     try {
       for (;;) {
         const res = await fetch(
-          `${this.base}/api/sync/pull?since=${this.cursor}&device=${encodeURIComponent(this.opts.replica.deviceId)}`,
+          `${this.base}/api/sync/pull?since=${this.cursor}&device=${encodeURIComponent(this.opts.replica.deviceId)}&schema=${SYNC_SCHEMA}`,
           { headers: this.headers() },
         );
         if (!res.ok) throw new Error(await errorText(res));
-        const body = (await res.json()) as { ops: Op[]; cursor: number; more: boolean };
+        const body = (await res.json()) as { ops: Op[]; cursor: number; more: boolean; schema?: number };
+        const schema = body.schema ?? 1;
+        if (schema > this.serverSchema) {
+          this.serverSchema = schema;
+          if (this.sendable().length) this.schedulePush();
+        }
         if (body.ops.length) this.opts.replica.receive(body.ops);
         this.cursor = body.cursor;
         await this.opts.storage.set(this.cursorKey, this.cursor);

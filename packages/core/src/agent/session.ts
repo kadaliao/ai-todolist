@@ -20,7 +20,8 @@ export type TaskField =
   | 'project'
   | 'section'
   | 'parent'
-  | 'reminders';
+  | 'reminders'
+  | 'deadline';
 
 export type TaskChangeKind = 'added' | 'completed' | 'reopened' | 'deleted' | 'restored' | 'updated';
 
@@ -35,10 +36,12 @@ export type Change =
       fields: TaskField[];
     }
   | {
-      entity: 'project' | 'section' | 'label';
+      /** For memory: its text; for a setting: its key (and `value` the new value). */
+      entity: 'project' | 'section' | 'label' | 'memory' | 'setting';
       id: string;
       kind: 'added' | 'updated' | 'deleted';
       name: string;
+      value?: unknown;
     };
 
 /** Above these, a turn waits for the user's "yes" instead of applying right away. */
@@ -61,6 +64,7 @@ function taskFields(a: Task, b: Task): TaskField[] {
   if (a.sectionId !== b.sectionId) out.push('section');
   if (a.parentId !== b.parentId) out.push('parent');
   if (!same(a.reminders, b.reminders)) out.push('reminders');
+  if (a.deadline !== b.deadline) out.push('deadline');
   return out;
 }
 
@@ -106,12 +110,21 @@ export function diffChanges(
       changes.push({ entity, id, kind, before, after: now, fields });
       continue;
     }
+    if (entity === 'setting') {
+      const before = base.get('setting', id);
+      const now = after.get('setting', id);
+      if (same(before?.value, now?.value)) continue;
+      changes.push({ entity, id, kind: before ? 'updated' : 'added', name: id, value: now?.value ?? null });
+      continue;
+    }
     const before = base.get(entity, id);
     const now = after.get(entity, id);
     if (!before && !now) continue;
     const kind = !before ? 'added' : !now || (!before.deletedAt && now.deletedAt) ? 'deleted' : 'updated';
     if (kind === 'updated' && same(before, now)) continue;
-    changes.push({ entity, id, kind, name: (now ?? before)?.name ?? '' });
+    if (kind === 'added' && now?.deletedAt) continue;
+    const e = (now ?? before) as { name?: string; text?: string };
+    changes.push({ entity, id, kind, name: e.name ?? e.text ?? '' });
   }
   return changes;
 }
@@ -125,7 +138,8 @@ export function needsConfirmation(changes: Change[]): boolean {
   );
   for (const c of changes) {
     if (c.entity !== 'task') {
-      if (c.kind === 'deleted') return true;
+      // Forgetting a memory is a small, undoable thing; dropping a project is not.
+      if (c.kind === 'deleted' && c.entity !== 'memory' && c.entity !== 'setting') return true;
       continue;
     }
     if (c.kind === 'deleted') return true;

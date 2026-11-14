@@ -15,7 +15,8 @@ import { keyAtEnd, keyAtStart, placeAt } from './order';
 import { Overlay, type ReadStore } from './overlay';
 import { nextOccurrence, parseRule, reanchor, startRecurrence } from './recurrence';
 import type { Json, Mutation } from './sync/store';
-import { compareDates, isLocalDate, isLocalTime, type LocalDate } from './time';
+import { isLocalDate, isLocalTime, type LocalDate } from './time';
+import { isOverdue } from './views';
 
 /**
  * Command layer: the only way state changes, used by the UI, AI and MCP alike.
@@ -548,10 +549,9 @@ export function rescheduleTasks(
   });
 }
 
+/** Open tasks whose date (or, without one, deadline) has passed. */
 export function overdueTasks(store: ReadStore, today: LocalDate): Task[] {
-  return liveTasks(store).filter(
-    (t) => !t.completedAt && t.scheduled && compareDates(t.scheduled.date, today) < 0,
-  );
+  return liveTasks(store).filter((t) => !t.completedAt && isOverdue(t, today));
 }
 
 /** "Reschedule all overdue" — moves every overdue task to `date` (default today). */
@@ -755,6 +755,49 @@ export function deleteLabel(id: string): Command {
           t.labels.filter((l) => l !== id),
         );
     }
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// assistant memory and synced settings
+
+const MAX_MEMORY = 500;
+
+export const DAY_PART_NAMES = ['morning', 'noon', 'afternoon', 'evening'] as const;
+
+export function addMemory(text: string): Command<string> {
+  return command('remember', (ctx, w) => {
+    const t = text.trim().slice(0, MAX_MEMORY);
+    if (!t) throw new CommandError('memory must not be empty');
+    const id = ctx.newId();
+    w.create('memory', id, { text: t, origin: ctx.actor, createdAt: ctx.now.toISOString() });
+    return id;
+  });
+}
+
+export function updateMemory(id: string, text: string): Command {
+  return command('edit memory', (ctx, w) => {
+    mustGet(ctx.store, 'memory', id);
+    const t = text.trim().slice(0, MAX_MEMORY);
+    if (!t) throw new CommandError('memory must not be empty');
+    w.set('memory', id, 'text', t);
+  });
+}
+
+export function deleteMemory(id: string): Command {
+  return command('forget', (ctx, w) => {
+    mustGet(ctx.store, 'memory', id);
+    w.set('memory', id, 'deletedAt', ctx.now.toISOString());
+  });
+}
+
+/** Set a synced preference (`null` resets it to the default). */
+export function setSetting(key: string, value: unknown): Command {
+  return command(`set ${key}`, (ctx, w) => {
+    if (!/^[A-Za-z0-9_.-]{1,64}$/.test(key)) throw new CommandError(`invalid setting key: ${key}`);
+    if (!ctx.store.get('setting', key)) {
+      w.create('setting', key, { value: value ?? null, createdAt: ctx.now.toISOString() });
+    } else w.set('setting', key, 'value', value ?? null);
   });
 }
 

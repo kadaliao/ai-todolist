@@ -1,4 +1,12 @@
-import { type Actor, type Command, ENTITY_TYPES, type Op, Replica } from '@ai-todo/core';
+import {
+  type Actor,
+  type Command,
+  ENTITY_TYPES,
+  LEGACY_ENTITY_TYPES,
+  type Op,
+  Replica,
+  SYNC_SCHEMA,
+} from '@ai-todo/core';
 import { z } from 'zod';
 import type { Db } from './db';
 
@@ -41,14 +49,27 @@ export class Hub {
     return { acked: ops.map((o) => o.hlc), cursor };
   }
 
-  pull(since: number, limit: number, excludeNode?: string): { ops: Op[]; cursor: number; more: boolean } {
+  /**
+   * Ops after `since`. Apps older than schema 2 throw on entity types they don't know, so they
+   * only get the original ones; the cursor still moves past the rest.
+   */
+  pull(
+    since: number,
+    limit: number,
+    excludeNode?: string,
+    schema = 1,
+  ): { ops: Op[]; cursor: number; more: boolean; schema: number } {
     const rows = this.db.opsSince(since, limit);
     const cursor = rows.at(-1)?.seq ?? since;
     const suffix = excludeNode ? `-${excludeNode}` : null;
+    const known = schema >= 2 ? null : new Set<string>(LEGACY_ENTITY_TYPES);
     return {
-      ops: rows.map((r) => r.op).filter((op) => !suffix || !op.hlc.endsWith(suffix)),
+      ops: rows
+        .map((r) => r.op)
+        .filter((op) => (!suffix || !op.hlc.endsWith(suffix)) && (!known || known.has(op.entity))),
       cursor,
       more: rows.length === limit,
+      schema: SYNC_SCHEMA,
     };
   }
 

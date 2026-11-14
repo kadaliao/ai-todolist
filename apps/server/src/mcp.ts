@@ -19,12 +19,14 @@ const DESCRIPTIONS: Record<string, string> = {
     'Revert the most recent change made through this MCP server (keeps later edits made in the apps).',
   'delete-tasks':
     'Move tasks to the trash. Only tasks created by an agent (MCP or AI) can be deleted this way.',
+  remember: 'Save a note the user wants Docket’s assistants to keep in mind (synced to all their devices).',
 };
 
 export function createMcpServer(hub: Hub): McpServer {
   const server = new McpServer({ name: 'docket', version: '1.2.0' }, { capabilities: { tools: {} } });
 
   for (const tool of AGENT_TOOLS) {
+    if (tool.appOnly) continue;
     server.registerTool(
       tool.name,
       {

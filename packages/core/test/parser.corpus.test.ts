@@ -28,6 +28,7 @@ interface Case {
   title: string;
   date?: string;
   time?: string;
+  deadline?: string;
   duration?: number;
   rule?: string;
   from?: 'completion';
@@ -105,8 +106,8 @@ const cases: Case[] = [
   },
   { in: '每周一下午3点周会', title: '周会', date: '2026-11-16', time: '15:00', rule: 'FREQ=WEEKLY;BYDAY=MO' },
   { in: '每周一次大扫除', title: '大扫除', date: '2026-11-13', rule: 'FREQ=WEEKLY' },
-  { in: '每周一早上健身', title: '健身', date: '2026-11-16', rule: 'FREQ=WEEKLY;BYDAY=MO' },
-  { in: '每天晚上背单词', title: '背单词', date: '2026-11-13', rule: 'FREQ=DAILY' },
+  { in: '每周一早上健身', title: '健身', date: '2026-11-16', time: '09:00', rule: 'FREQ=WEEKLY;BYDAY=MO' },
+  { in: '每天晚上背单词', title: '背单词', date: '2026-11-13', time: '20:00', rule: 'FREQ=DAILY' },
   { in: '每周一 从下周开始 例会', title: '例会', date: '2026-11-16', rule: 'FREQ=WEEKLY;BYDAY=MO' },
   {
     in: 'Gym every monday 7am',
@@ -115,10 +116,28 @@ const cases: Case[] = [
     time: '07:00',
     rule: 'FREQ=WEEKLY;BYDAY=MO',
   },
-  { in: '周五之前交房租', title: '交房租', date: '2026-11-13' },
-  { in: '下周三前提交报销', title: '提交报销', date: '2026-11-18' },
-  { in: 'Pay rent by friday', title: 'Pay rent', date: '2026-11-13' },
-  { in: 'Report due next fri', title: 'Report', date: '2026-11-20' },
+
+  // --- 截止日：“之前 / 截止 / by / due” 是截止，不是计划哪天做
+  { in: '周五之前交房租', title: '交房租', deadline: '2026-11-13' },
+  { in: '下周三前提交报销', title: '提交报销', deadline: '2026-11-18' },
+  { in: '截止下周一 交方案', title: '交方案', deadline: '2026-11-16' },
+  { in: '方案下周一截止', title: '方案', deadline: '2026-11-16' },
+  { in: '最晚月底 续签合同', title: '续签合同', deadline: '2026-11-30' },
+  { in: '月底以前续签合同', title: '续签合同', deadline: '2026-11-30' },
+  { in: 'Pay rent by friday', title: 'Pay rent', deadline: '2026-11-13' },
+  { in: 'Report due next fri', title: 'Report', deadline: '2026-11-20' },
+  { in: '每周五之前交周报', title: '交周报', date: '2026-11-13', rule: 'FREQ=WEEKLY;BYDAY=FR' },
+  { in: '下周一开始健身', title: '健身', date: '2026-11-16' },
+
+  // --- 只说了早上 / 晚上：按时段的默认时间
+  { in: '明天早上跑步', title: '跑步', date: '2026-11-14', time: '09:00' },
+  { in: '明早跑步', title: '跑步', date: '2026-11-14', time: '09:00' },
+  { in: '明天中午 约饭', title: '约饭', date: '2026-11-14', time: '12:00' },
+  { in: '周六下午去理发', title: '去理发', date: '2026-11-14', time: '15:00' },
+  { in: '今晚看书', title: '看书', date: '2026-11-13', time: '20:00' },
+  { in: '晚上 给妈妈打电话', title: '给妈妈打电话', date: '2026-11-13', time: '20:00' },
+  { in: '早上 遛狗', title: '遛狗', date: '2026-11-14', time: '09:00' },
+  { in: 'Call mom tomorrow evening', title: 'Call mom', date: '2026-11-14', time: '20:00' },
 
   // --- English
   { in: 'Call mom tomorrow 3pm', title: 'Call mom', date: '2026-11-14', time: '15:00' },
@@ -201,6 +220,7 @@ const cases: Case[] = [
   { in: '明天下午3点开会', ignore: ['明天下午3点'], title: '明天下午3点开会' },
   { in: '写周报 #工作', ignore: ['#工作'], title: '写周报 #工作' },
   { in: '每天背单词', ignore: ['每天'], title: '每天背单词' },
+  { in: '周五之前交房租', ignore: ['周五之前'], title: '周五之前交房租' },
 ];
 
 describe('quick-add corpus', () => {
@@ -215,6 +235,7 @@ describe('quick-add corpus', () => {
         title: r.title,
         date: r.scheduled?.date,
         time: r.scheduled?.time,
+        deadline: r.deadline,
         duration: r.scheduled?.duration,
         rule: r.recurrence?.rule,
         from: r.recurrence?.from === 'completion' ? 'completion' : undefined,
@@ -227,6 +248,7 @@ describe('quick-add corpus', () => {
         title: c.title,
         date: c.date,
         time: c.time,
+        deadline: c.deadline,
         duration: c.duration,
         rule: c.rule,
         from: c.from,
@@ -265,6 +287,25 @@ describe('quick-add tokens', () => {
     expect(late.scheduled?.date).toBe('2026-11-14');
     const ny = parseQuickAdd('明天开会', { ...BASE, timeZone: 'America/New_York' });
     expect(ny.scheduled?.date).toBe('2026-11-13'); // it's 21:00 on the 12th in New York
+  });
+
+  it('day-part times follow the user’s settings', () => {
+    const dayParts = { morning: '07:30', noon: '12:30', afternoon: '14:00', evening: '21:00' };
+    expect(parseQuickAdd('明天早上跑步', { ...BASE, dayParts }).scheduled).toEqual({
+      date: '2026-11-14',
+      time: '07:30',
+    });
+    expect(parseQuickAdd('明天晚上 复盘', { ...BASE, dayParts }).scheduled?.time).toBe('21:00');
+    // An explicit time still wins.
+    expect(parseQuickAdd('明天早上8点跑步', { ...BASE, dayParts }).scheduled?.time).toBe('08:00');
+  });
+
+  it('a deadline is its own token', () => {
+    const r = parseQuickAdd('交房租 周五之前 #生活', BASE);
+    expect(r.tokens.map((t) => [t.kind, t.text])).toEqual([
+      ['deadline', '周五之前'],
+      ['project', '#生活'],
+    ]);
   });
 
   it('a bare weekday naming today means today at any time of day', () => {

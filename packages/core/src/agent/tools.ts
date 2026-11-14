@@ -1,25 +1,39 @@
 import { z } from 'zod';
 import {
+  addMemory,
   type Command,
   CommandError,
   completeTasks,
   createLabel,
   createProject,
   createTasks,
+  DAY_PART_NAMES,
+  deleteMemory,
   deleteTasks,
   moveTasks,
   type NewTask,
   rescheduleTasks,
+  setSetting,
   type TaskPatch,
   uncompleteTask,
   updateTask,
 } from '../commands';
-import type { Priority, Reminder, Task } from '../model';
+import type { DayParts, Priority, Reminder, Task } from '../model';
 import { sortByOrder } from '../order';
 import type { ReadStore } from '../overlay';
 import { parseQuickAdd, type QuickAddResult } from '../parser';
-import type { LocalDate } from '../time';
-import { search, sidebar, today as todayView, upcoming } from '../views';
+import { addDays, compareDates, isoWeekday, type LocalDate, wallClock } from '../time';
+import {
+  DAY_PARTS_KEY,
+  dayParts,
+  isOverdue,
+  logbook,
+  memories,
+  search,
+  sidebar,
+  today as todayView,
+  upcoming,
+} from '../views';
 
 /**
  * The task-list tools an agent can call. The same definitions back the MCP server (Claude and
@@ -63,6 +77,8 @@ export interface AgentTool {
   readonly schema: z.ZodObject<z.ZodRawShape>;
   readonly readOnly: boolean;
   readonly destructive: boolean;
+  /** Only for the in-app assistant (e.g. asking the user a question), not offered over MCP. */
+  readonly appOnly: boolean;
   run(env: ToolEnv, input: unknown): unknown;
 }
 
@@ -73,6 +89,7 @@ function defineTool<S extends z.ZodRawShape>(def: {
   input: S;
   readOnly?: boolean;
   destructive?: boolean;
+  appOnly?: boolean;
   run(env: ToolEnv, input: z.infer<z.ZodObject<S>>): unknown;
 }): AgentTool {
   const schema = z.object(def.input);
@@ -84,6 +101,7 @@ function defineTool<S extends z.ZodRawShape>(def: {
     schema: schema as unknown as z.ZodObject<z.ZodRawShape>,
     readOnly: def.readOnly ?? false,
     destructive: def.destructive ?? false,
+    appOnly: def.appOnly ?? false,
     run: (env, input) => def.run(env, input as z.infer<z.ZodObject<S>>),
   };
 }
@@ -103,6 +121,7 @@ export interface TaskBrief {
   title: string;
   date?: string;
   time?: string;
+  deadline?: string;
   repeat?: string;
   repeatFrom?: string;
   project: string;
@@ -125,6 +144,7 @@ export function briefTask(s: ReadStore, t: Task, ref: (id: string) => string = (
     ...(t.scheduled
       ? { date: t.scheduled.date, ...(t.scheduled.time ? { time: t.scheduled.time } : {}) }
       : {}),
+    ...(t.deadline ? { deadline: t.deadline } : {}),
     ...(t.recurrence ? { repeat: t.recurrence.rule, repeatFrom: t.recurrence.from } : {}),
     project: project?.name ?? 'Inbox',
     ...(section ? { section: section.name } : {}),
@@ -184,16 +204,34 @@ function labelIds(env: ToolEnv, names: string[], created: string[]): string[] {
   return [...new Set(ids)];
 }
 
-function parseWhen(env: ToolEnv, when: string): Pick<QuickAddResult, 'scheduled' | 'recurrence'> {
-  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(when.trim())
-    ? { scheduled: { date: when.trim() } }
-    : parseQuickAdd(when, { now: env.now, timeZone: env.timeZone });
-  if (!parsed.scheduled) {
+type When = Pick<QuickAddResult, 'scheduled' | 'recurrence' | 'deadline'>;
+
+function parsePhrase(env: ToolEnv, phrase: string): When {
+  return /^\d{4}-\d{2}-\d{2}$/.test(phrase.trim())
+    ? { scheduled: { date: phrase.trim() } }
+    : parseQuickAdd(phrase, { now: env.now, timeZone: env.timeZone, dayParts: dayParts(env.store) });
+}
+
+/** A date phrase; “周五之前” comes back as a deadline rather than a planned day. */
+function parseWhen(env: ToolEnv, when: string): When {
+  const parsed = parsePhrase(env, when);
+  if (!parsed.scheduled && !parsed.deadline) {
     throw new ToolError(
       `Could not understand when="${when}". Use the user's wording, e.g. "tomorrow 3pm", "下周五", "每周一", or YYYY-MM-DD.`,
     );
   }
   return parsed;
+}
+
+function parseDeadline(env: ToolEnv, phrase: string): LocalDate {
+  const parsed = parsePhrase(env, phrase);
+  const date = parsed.deadline ?? parsed.scheduled?.date;
+  if (!date) {
+    throw new ToolError(
+      `Could not understand deadline="${phrase}". Use the user's wording, e.g. "周五", "月底".`,
+    );
+  }
+  return date;
 }
 
 function taskId(env: ToolEnv, ref: string): string {
@@ -251,6 +289,12 @@ const newTaskInput = z.object({
   labels: z.array(z.string()).optional(),
   priority: priority.optional(),
   notes: z.string().optional(),
+  deadline: z
+    .string()
+    .optional()
+    .describe(
+      'Hard deadline in the user’s words (“周五之前交” → "周五", "月底", "due Monday"), separate from when they plan to do it',
+    ),
   parentId: z.string().optional().describe('Make it a subtask of this task id'),
   remindMinutesBefore: remind.optional(),
 });
@@ -289,6 +333,8 @@ export const getOverview = defineTool({
         })),
       ),
       labels: sb.labels.map((l) => l.name),
+      memory: memories(s).map((m) => m.text),
+      dayParts: dayParts(s),
     };
   },
 });
@@ -297,19 +343,53 @@ export const findTasks = defineTool({
   name: 'find-tasks',
   title: 'Find tasks',
   description:
-    'Search tasks by text and/or filter by project or label. Open tasks only unless includeCompleted. Searches are substring matches, so try a shorter keyword if nothing is found.',
+    'Search tasks by text and/or filter them (project, label, date, deadline, priority), e.g. to act on a group: “工作里没日期的” = project "工作" + date "none". Open tasks only unless includeCompleted. Searches are substring matches, so try a shorter keyword if nothing is found.',
   input: {
     query: z.string().optional().describe('Text to match in titles and notes'),
     project: z.string().optional().describe('Project name, or "Inbox"'),
     label: z.string().optional(),
+    date: z
+      .enum(['none', 'any', 'overdue', 'today', 'future'])
+      .optional()
+      .describe(
+        'none = no date set, any = has a date, overdue = date or deadline passed, today = listed today, future = after today',
+      ),
+    deadline: z
+      .string()
+      .optional()
+      .describe(
+        'Only tasks with a deadline on or before this day ("周五", "下周", "月底"); "any" = any deadline',
+      ),
+    priority: priority.optional(),
+    topLevel: z.boolean().optional().describe('Leave out subtasks'),
     includeCompleted: z.boolean().optional(),
     limit: z.number().int().min(1).max(200).optional(),
   },
   readOnly: true,
-  run(env, { query, project, label, includeCompleted, limit = 50 }) {
+  run(env, { query, project, label, date, deadline, priority: p, topLevel, includeCompleted, limit = 50 }) {
     const s = env.store;
     let tasks = query ? search(s, query, 500) : live(s.all('task'));
     if (!includeCompleted) tasks = tasks.filter((t) => !t.completedAt);
+    if (topLevel) tasks = tasks.filter((t) => !t.parentId);
+    if (date) {
+      const listed = new Set(
+        Object.values(todayView(s, env.today))
+          .flat()
+          .map((t) => t.id),
+      );
+      tasks = tasks.filter((t) => {
+        if (date === 'none') return !t.scheduled;
+        if (date === 'any') return !!t.scheduled;
+        if (date === 'overdue') return !t.completedAt && isOverdue(t, env.today);
+        if (date === 'today') return listed.has(t.id) && !isOverdue(t, env.today);
+        return !!t.scheduled && compareDates(t.scheduled.date, env.today) > 0;
+      });
+    }
+    if (deadline) {
+      const by = deadline.trim().toLowerCase() === 'any' ? null : parseDeadline(env, deadline);
+      tasks = tasks.filter((t) => t.deadline && (!by || compareDates(t.deadline, by) <= 0));
+    }
+    if (p) tasks = tasks.filter((t) => t.priority === PRIORITY_VALUE[p]);
     if (project) {
       const p = findProject(s, project);
       if (!p) throw new ToolError(`No project named “${project}”. Projects: ${projectNames(s)}.`);
@@ -373,6 +453,7 @@ export const addTasks = defineTool({
         projects: live(s.all('project')).map((p) => ({ id: p.id, name: p.name })),
         sections: live(s.all('section')).map((x) => ({ id: x.id, name: x.name, projectId: x.projectId })),
         labels: live(s.all('label')).map((l) => ({ id: l.id, name: l.name })),
+        dayParts: dayParts(s),
       });
       const fromWhen = t.when ? parseWhen(env, t.when) : null;
       const parentId = t.parentId ? taskId(env, t.parentId) : null;
@@ -397,6 +478,7 @@ export const addTasks = defineTool({
         ),
       ];
       const source = fromWhen ?? fromTitle;
+      const deadline = t.deadline ? parseDeadline(env, t.deadline) : (source.deadline ?? fromTitle.deadline);
       if (t.remindMinutesBefore != null && !source.scheduled?.time) {
         throw new ToolError(`“${t.title}” needs a time of day for a reminder; include it in \`when\`.`);
       }
@@ -410,6 +492,7 @@ export const addTasks = defineTool({
         ...(t.notes ? { notes: t.notes } : {}),
         ...(source.scheduled ? { scheduled: source.scheduled } : {}),
         ...(source.recurrence ? { recurrence: source.recurrence } : {}),
+        ...(deadline ? { deadline } : {}),
         ...(t.remindMinutesBefore != null ? { reminders: reminder(env, t.remindMinutesBefore) } : {}),
       });
     }
@@ -425,7 +508,7 @@ export const updateTasks = defineTool({
   name: 'update-tasks',
   title: 'Update tasks',
   description:
-    'Edit title, notes, priority, labels, project/section, date, time or reminder of one or more tasks in one undoable step. To only move tasks to another day, reschedule-tasks is simpler.',
+    'Edit title, notes, priority, labels, project/section, date, time, deadline or reminder of one or more tasks in one undoable step. To only move tasks to another day, reschedule-tasks is simpler.',
   input: {
     tasks: z
       .array(
@@ -453,6 +536,11 @@ export const updateTasks = defineTool({
             .describe(
               'Only change the time of day, keeping the date: "16:00"; null makes it an all-day task',
             ),
+          deadline: z
+            .string()
+            .nullable()
+            .optional()
+            .describe('New deadline in the user’s words ("周五", "月底"), or null to remove it'),
           remindMinutesBefore: remind.optional(),
         }),
       )
@@ -495,13 +583,21 @@ export const updateTasks = defineTool({
         if (t.when === null) env.run(rescheduleTasks([id], null));
         else {
           const parsed = parseWhen(env, t.when);
-          env.run(
-            updateTask(id, {
-              scheduled: parsed.scheduled ?? null,
-              ...(parsed.recurrence ? { recurrence: parsed.recurrence } : {}),
-            }),
-          );
+          if (parsed.scheduled) {
+            env.run(
+              updateTask(id, {
+                scheduled: parsed.scheduled,
+                ...(parsed.recurrence ? { recurrence: parsed.recurrence } : {}),
+              }),
+            );
+          }
+          // “改成周五之前” sets the deadline and leaves the planned day alone.
+          if (parsed.deadline && t.deadline === undefined)
+            env.run(updateTask(id, { deadline: parsed.deadline }));
         }
+      }
+      if (t.deadline !== undefined) {
+        env.run(updateTask(id, { deadline: t.deadline === null ? null : parseDeadline(env, t.deadline) }));
       }
       if (t.time !== undefined) {
         const task = env.store.get('task', id) as Task;
@@ -556,7 +652,8 @@ export const rescheduleTasksTool = defineTool({
   },
   run(env, { ids, when, mode = 'occurrence' }) {
     const resolved = ids.map((r) => taskId(env, r));
-    const scheduled = when ? parseWhen(env, when).scheduled : null;
+    const parsed = when ? parseWhen(env, when) : null;
+    const scheduled = parsed ? (parsed.scheduled ?? { date: parsed.deadline as string }) : null;
     env.run(rescheduleTasks(resolved, scheduled?.date ?? null, mode));
     if (scheduled?.time) {
       for (const id of resolved) {
@@ -626,16 +723,161 @@ export const undoLastChange = defineTool({
   },
 });
 
+const PERIODS = ['today', 'yesterday', 'this-week', 'last-week', 'last-7-days', 'this-month'] as const;
+type Period = (typeof PERIODS)[number];
+
+/** First and last day of a review period, weeks starting on Monday. */
+export function periodRange(period: Period, today: LocalDate): { from: LocalDate; to: LocalDate } {
+  const monday = addDays(today, 1 - isoWeekday(today));
+  switch (period) {
+    case 'today':
+      return { from: today, to: today };
+    case 'yesterday':
+      return { from: addDays(today, -1), to: addDays(today, -1) };
+    case 'this-week':
+      return { from: monday, to: today };
+    case 'last-week':
+      return { from: addDays(monday, -7), to: addDays(monday, -1) };
+    case 'last-7-days':
+      return { from: addDays(today, -6), to: today };
+    case 'this-month':
+      return { from: `${today.slice(0, 8)}01`, to: today };
+  }
+}
+
+export const reviewTool = defineTool({
+  name: 'review-period',
+  title: 'Review a period',
+  description:
+    'What got done in a period (“这周做了什么”, “回顾一下这周”, “昨天完成了哪些”): completed tasks by day and project, plus what is overdue now and how much is planned for the next 7 days.',
+  input: {
+    period: z.enum(PERIODS).optional().describe('Default this-week (Monday until today)'),
+  },
+  readOnly: true,
+  run(env, { period = 'this-week' }) {
+    const s = env.store;
+    const { from, to } = periodRange(period, env.today);
+    const done: { date: LocalDate; title: string; project: string }[] = [];
+    const projectName = (id: string | null) => (id ? (s.get('project', id)?.name ?? 'Inbox') : 'Inbox');
+    for (const e of logbook(s, 2000)) {
+      const date = wallClock(new Date(e.completedAt), env.timeZone).date;
+      if (compareDates(date, from) < 0) break;
+      if (compareDates(date, to) > 0) continue;
+      if (e.kind === 'task') {
+        if (e.task.parentId) continue;
+        done.push({ date, title: e.task.title, project: projectName(e.task.projectId) });
+      } else done.push({ date, title: e.completion.title, project: projectName(e.completion.projectId) });
+    }
+    const byProject: Record<string, number> = {};
+    for (const d of done) byProject[d.project] = (byProject[d.project] ?? 0) + 1;
+    const added = live(s.all('task')).filter((t) => {
+      const d = wallClock(new Date(t.createdAt), env.timeZone).date;
+      return !t.parentId && compareDates(d, from) >= 0 && compareDates(d, to) <= 0;
+    }).length;
+    const td = todayView(s, env.today);
+    const next = upcoming(s, addDays(env.today, 1), 7).reduce((n, b) => n + b.tasks.length, 0);
+    return {
+      from,
+      to,
+      completedCount: done.length,
+      completedByProject: byProject,
+      completed: done.slice(0, 80).reverse(),
+      added,
+      overdue: td.overdue.slice(0, 20).map((t) => briefTask(s, t, (x) => env.ref(x))),
+      today: td.today.length,
+      next7Days: next,
+    };
+  },
+});
+
+export const rememberTool = defineTool({
+  name: 'remember',
+  title: 'Remember',
+  description:
+    'Save something the user wants you to keep in mind from now on (“记住张三是我老板”, “以后健身的事都放生活”). For what a bare 早上/晚上 means, use set-preferences instead.',
+  input: { text: z.string().min(1).max(500).describe('One short sentence, in the user’s language') },
+  run(env, { text }) {
+    const same = memories(env.store).find((m) => lower(m.text) === lower(text));
+    if (same) return { remembered: same.text, existed: true };
+    env.run(addMemory(text));
+    return { remembered: text.trim() };
+  },
+});
+
+export const forgetTool = defineTool({
+  name: 'forget',
+  title: 'Forget',
+  description: 'Drop something you were told to remember (“别再记着张三的事了”).',
+  input: { text: z.string().min(1).describe('Words from the memory to drop') },
+  run(env, { text }) {
+    const all = memories(env.store);
+    const q = lower(text);
+    const hits = all.filter((m) => lower(m.text).includes(q) || q.includes(lower(m.text)));
+    if (!hits.length) {
+      throw new ToolError(
+        `Nothing remembered matches “${text}”. Memories: ${all.map((m) => `“${m.text}”`).join(', ') || '(none)'}.`,
+      );
+    }
+    for (const m of hits) env.run(deleteMemory(m.id));
+    return { forgot: hits.map((m) => m.text) };
+  },
+});
+
+export const setPreferences = defineTool({
+  name: 'set-preferences',
+  title: 'Set preferences',
+  description:
+    'Change what a bare day-part word means when the user gives no clock time (“我说早上一般是8点”, “晚上指九点”). The app’s date parser uses these times for 早上/中午/下午/晚上.',
+  input: Object.fromEntries(
+    DAY_PART_NAMES.map((k) => [k, z.string().optional().describe(`HH:mm for ${k}`)]),
+  ) as Record<(typeof DAY_PART_NAMES)[number], z.ZodOptional<z.ZodString>>,
+  run(env, input) {
+    const next: DayParts = { ...dayParts(env.store) };
+    for (const k of DAY_PART_NAMES) {
+      const v = input[k];
+      if (v !== undefined) next[k] = normalizeTime(v);
+    }
+    env.run(setSetting(DAY_PARTS_KEY, next));
+    return { dayParts: next };
+  },
+});
+
+export const askUser = defineTool({
+  name: 'ask-user',
+  title: 'Ask the user',
+  description:
+    'Ask one short question when the request is ambiguous, e.g. two tasks both match “张三那个”. The app shows the options as buttons and ends your turn; the user’s answer comes as the next message. Don’t guess between candidates, and don’t ask when one clearly matches.',
+  input: {
+    question: z.string().min(1).describe('One short spoken-style question in the user’s language'),
+    options: z
+      .array(z.string().min(1).max(60))
+      .min(2)
+      .max(6)
+      .optional()
+      .describe('Short answers to pick from, e.g. the candidate task titles'),
+  },
+  readOnly: true,
+  appOnly: true,
+  run(_env, { question, options }) {
+    return { asked: question, ...(options ? { options } : {}) };
+  },
+});
+
 export const AGENT_TOOLS: readonly AgentTool[] = [
   getOverview,
   findTasks,
   findTasksByDate,
+  reviewTool,
   addTasks,
   updateTasks,
   completeTasksTool,
   rescheduleTasksTool,
   deleteTasksTool,
   createProjectTool,
+  rememberTool,
+  forgetTool,
+  setPreferences,
+  askUser,
   undoLastChange,
 ];
 

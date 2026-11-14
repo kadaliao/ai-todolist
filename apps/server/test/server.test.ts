@@ -1,5 +1,5 @@
-import { createTask, type Op, Replica } from '@ai-todo/core';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { addMemory, createTask, type Op, Replica, SyncClient } from '@ai-todo/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app';
 import { Db } from '../src/db';
 import { Hub } from '../src/hub';
@@ -27,11 +27,12 @@ async function push(ops: Op[]) {
   return app.request('/api/sync/push', { method: 'POST', headers: auth(), body: JSON.stringify({ ops }) });
 }
 
-async function pull(since: number, deviceId?: string) {
-  const res = await app.request(`/api/sync/pull?since=${since}${deviceId ? `&device=${deviceId}` : ''}`, {
-    headers: auth(),
-  });
-  return (await res.json()) as { ops: Op[]; cursor: number; more: boolean };
+async function pull(since: number, deviceId?: string, schema?: number) {
+  const res = await app.request(
+    `/api/sync/pull?since=${since}${deviceId ? `&device=${deviceId}` : ''}${schema ? `&schema=${schema}` : ''}`,
+    { headers: auth() },
+  );
+  return (await res.json()) as { ops: Op[]; cursor: number; more: boolean; schema?: number };
 }
 
 async function mcp(method: string, params: unknown, id = 1) {
@@ -130,6 +131,71 @@ describe('sync', () => {
     expect(((await res.json()) as { error: string }).error).toMatch(/clock/);
   });
 
+  it('apps older than schema 2 never see memory or setting ops', async () => {
+    const a = device('a');
+    a.dispatch(createTask({ title: 't' }));
+    a.dispatch(addMemory('张三是我老板'));
+    expect((await push(a.pending())).status).toBe(200);
+    const old = await pull(0, 'b');
+    expect(old.ops.map((o) => o.entity)).not.toContain('memory');
+    expect(old.cursor).toBe(db.maxSeq());
+    const fresh = await pull(0, 'b', 2);
+    expect(fresh.schema).toBe(2);
+    expect(fresh.ops.map((o) => o.entity)).toContain('memory');
+  });
+
+  describe('client against servers old and new', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    /** Routes the client's fetches to the app; `legacy` makes pulls look like a 1.x server's. */
+    function serve(legacy: () => boolean) {
+      const pushed: string[] = [];
+      vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+        const path = url.replace('http://srv', '');
+        if (path.startsWith('/api/sync/push')) {
+          const body = JSON.parse(String(init?.body)) as { ops: Op[] };
+          pushed.push(...body.ops.map((o) => o.entity));
+          if (legacy() && body.ops.some((o) => o.entity === 'memory'))
+            return new Response('{"error":"invalid ops"}', { status: 400 });
+        }
+        const res = await app.request(path, init);
+        if (legacy() && path.startsWith('/api/sync/pull')) {
+          const body = (await res.json()) as Record<string, unknown>;
+          delete body.schema;
+          return Response.json(body);
+        }
+        return res;
+      });
+      return pushed;
+    }
+
+    it('holds memory ops back until the server says it takes them', async () => {
+      let legacy = true;
+      const pushed = serve(() => legacy);
+      const r = device('c');
+      r.dispatch(createTask({ title: 'x' }));
+      r.dispatch(addMemory('记住这个'));
+      const store = new Map<string, unknown>();
+      const client = new SyncClient({
+        replica: r,
+        url: 'http://srv',
+        token,
+        storage: { get: async (k) => store.get(k) as never, set: async (k, v) => void store.set(k, v) },
+        pollMs: 1e9,
+      });
+      await client.syncNow();
+      expect(pushed).not.toContain('memory');
+      expect(new Set(r.pending().map((o) => o.entity))).toEqual(new Set(['memory']));
+      legacy = false;
+      await client.syncNow(); // the pull learns schema 2 …
+      await client.syncNow(); // … and the next push sends the rest
+      expect(r.pending()).toHaveLength(0);
+      expect(hub.replica.store.all('memory').map((m) => m.text)).toEqual(['记住这个']);
+      expect([...store.keys()]).toEqual(['sync.cursor.v2:http://srv']);
+      client.stop();
+    });
+  });
+
   it('survives a restart by replaying the log', async () => {
     const a = device('a');
     const { result: id } = a.dispatch(createTask({ title: 'durable' }));
@@ -151,8 +217,12 @@ describe('MCP', () => {
         'delete-tasks',
         'find-tasks',
         'find-tasks-by-date',
+        'forget',
         'get-overview',
+        'remember',
         'reschedule-tasks',
+        'review-period',
+        'set-preferences',
         'undo-last-change',
         'update-tasks',
       ].sort(),
