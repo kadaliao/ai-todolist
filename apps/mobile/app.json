@@ -2,13 +2,13 @@
   "expo": {
     "name": "Docket",
     "slug": "docket",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "scheme": "docket",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "buildNumber": "2",
+      "buildNumber": "3",
       "bundleIdentifier": "com.kadaliao.docket",
       "supportsTablet": true,
       "infoPlist": {
@@ -46,7 +46,7 @@
     },
     "android": {
       "package": "com.kadaliao.docket",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1F8F6A",
