@@ -54,7 +54,21 @@ docker compose exec docket node dist/cli.js token revoke iphone
 DOCKET_AI_BASE_URL=… DOCKET_AI_API_KEY=… DOCKET_AI_MODEL=… pnpm --filter @ai-todo/server eval
 ```
 
-`DOCKET_AI_STT_MODEL`（如 `whisper-1`）可选：用于网页端在不支持浏览器语音识别时的录音转文字。
+配了 `DOCKET_AI_*` 就同时开启语音助手（`/api/agent`）。模型要支持 tool calling（DeepSeek、GPT、Qwen、Claude 等都可以）。
+
+### 云端语音识别（可选）
+
+各设备默认用系统自带的语音识别，不需要服务器参与。想让人名、专有名词更准，可以在服务器上配一个 OpenAI 兼容的 `/audio/transcriptions` 接口，然后在应用的 设置 → AI → 语音识别 里选“云端识别”：
+
+| 变量                  | 说明                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `DOCKET_STT_MODEL`    | 例如 `FunAudioLLM/SenseVoiceSmall`（硅基流动）、`gpt-4o-mini-transcribe`、`whisper-1` |
+| `DOCKET_STT_BASE_URL` | 不填则用 `DOCKET_AI_BASE_URL`（DeepSeek 没有语音接口，要另填）                        |
+| `DOCKET_STT_API_KEY`  | 不填则用 `DOCKET_AI_API_KEY`                                                          |
+
+实测 aihubmix 的 `whisper-1`：一句 5 秒的中文约 1.5 秒返回（第一次调用可能慢很多）。旧的 `DOCKET_AI_STT_MODEL` 仍然有效，等同于 `DOCKET_STT_MODEL`。项目名和标签名会作为提示词一起发给识别模型。
+
+注意：网页版在 Chrome 里的“系统识别”其实是把声音发到 Google 的服务器识别，国内网络下往往用不了，这时请改用云端识别；Safari 和手机应用用的是系统自己的识别。
 
 ## 5. MCP
 

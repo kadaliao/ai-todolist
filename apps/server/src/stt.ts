@@ -24,7 +24,8 @@ export class Stt {
     form.append('file', audio, filename);
     form.append('model', this.config.model);
     if (opts.language) form.append('language', opts.language);
-    if (opts.hint) form.append('prompt', opts.hint);
+    const prompt = transcriptionPrompt(opts.language, opts.hint);
+    if (prompt) form.append('prompt', prompt);
     const res = await fetch(`${this.config.baseURL.replace(/\/+$/, '')}/audio/transcriptions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.config.apiKey}` },
@@ -37,4 +38,14 @@ export class Stt {
     }
     return ((await res.json()) as { text: string }).text.trim();
   }
+}
+
+/**
+ * Whisper-style models treat the prompt as preceding text: a Simplified Chinese sentence keeps
+ * them from answering in Traditional characters, and the user's project/label names help them
+ * spell those right.
+ */
+export function transcriptionPrompt(language?: string, hint?: string): string {
+  const lead = language === 'zh' ? '以下是普通话的句子，使用简体中文。' : '';
+  return `${lead}${hint ?? ''}`.trim();
 }

@@ -104,6 +104,8 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
   let stream: MediaStream | null = null;
   let audio: AudioContext | null = null;
   let raf = 0;
+  /** Only trust "nothing was said" when the level meter is actually running. */
+  let meterOk = false;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true },
@@ -117,6 +119,9 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
   if (stream) {
     try {
       audio = new AudioContext();
+      // Created after an await, so the page may consider it un-gestured; ask to run anyway.
+      if (audio.state === 'suspended') await audio.resume().catch(() => {});
+      meterOk = audio.state === 'running';
       const analyser = audio.createAnalyser();
       analyser.fftSize = 512;
       audio.createMediaStreamSource(stream).connect(analyser);
@@ -212,7 +217,8 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
     recorder.onstop = async () => {
       if (cancelled) return finish({ text: '' });
       const blob = new Blob(chunks, { type: recorder?.mimeType || 'audio/webm' });
-      if (!spoke || blob.size < 2000) return finish({ text: heard() });
+      // Whisper-style models invent text for silence, so skip uploads with nothing said.
+      if ((meterOk && !spoke) || blob.size < 2000) return finish({ text: heard() });
       opts.onTranscribing?.();
       try {
         const text = await transcribeCloud(blob, lang.slice(0, 2), opts.hints);
@@ -255,7 +261,8 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
       const now = Date.now();
       if (now - started > MAX_MS) stop();
       else if (opts.handsFree() && spoke && now - lastActivity > SILENCE_MS) stop();
-      else if (opts.handsFree() && !spoke && now - started > NOTHING_MS) stop();
+      else if (opts.handsFree() && !spoke && meterOk && now - started > NOTHING_MS) stop();
+      else if (opts.handsFree() && !spoke && !meterOk && now - started > NOTHING_MS * 2) stop();
     }, 200),
   );
 

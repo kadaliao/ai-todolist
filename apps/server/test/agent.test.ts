@@ -194,7 +194,7 @@ describe('/api/ai/transcribe', () => {
     expect(seen).toEqual({
       model: 'sense-voice',
       language: 'zh',
-      prompt: '工作、生活',
+      prompt: '以下是普通话的句子，使用简体中文。工作、生活',
       size: 3000,
       auth: 'Bearer sk-test',
     });

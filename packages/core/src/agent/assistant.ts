@@ -336,7 +336,7 @@ export class Assistant {
           output = {
             ...(output as object),
             confirmation:
-              'Big change: it is staged and applies only after the user confirms. Briefly say what will change and ask.',
+              'Big change: NOTHING has been applied yet; it applies only after the user confirms. Phrase your reply as a question about what will change, e.g. “要删掉“买牛奶”吗？” or “要把这 5 件事挪到周四吗？”. Never say it is already done.',
           };
         }
         return { id: call.id, name: call.name, output, ...(r.error ? { error: true as const } : {}) };
