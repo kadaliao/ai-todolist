@@ -14,7 +14,7 @@ interface SyncStore {
   state: SyncState | 'off';
   message: string;
   config: SyncConfig | null;
-  ai: { available: boolean; model?: string; speech?: boolean; agent?: boolean } | null;
+  ai: { available: boolean; model?: string; speech?: boolean; stream?: boolean; agent?: boolean } | null;
   /** Set when local data was dropped to adopt the account; the app reloads its replica. */
   reloadNonce: number;
 }
@@ -31,14 +31,26 @@ let client: SyncClient | null = null;
 
 function start(replica: Replica, config: SyncConfig): void {
   client?.stop();
-  useSync.setState({ state: 'connecting', config });
+  // What the server could do last time, so a session that starts at launch (Siri, Control
+  // Center, a widget) picks the right recognizer before the first health check answers.
+  const known = getSetting<SyncStore['ai'] & { url?: string }>('sync.ai');
+  useSync.setState({
+    state: 'connecting',
+    config,
+    ...(known && known.url === config.url && !useSync.getState().ai ? { ai: known } : {}),
+  });
   client = new SyncClient({
     replica,
     url: config.url,
     token: config.token,
     storage: syncStorage,
     onStatus: (s) => useSync.setState({ state: s.state, message: s.message }),
-    onHealth: (h) => useSync.setState({ ai: h.ai ?? null }),
+    onHealth: (h) => {
+      useSync.setState({ ai: h.ai ?? null });
+      const known = h.ai ? { ...h.ai, url: config.url } : null;
+      if (JSON.stringify(known) !== JSON.stringify(getSetting('sync.ai') ?? null))
+        setSetting('sync.ai', known);
+    },
   });
   void client.start();
 }

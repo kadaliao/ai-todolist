@@ -10,6 +10,7 @@ import type { Db, Device } from './db';
 import { type Hub, pushSchema } from './hub';
 import { createMcpServer } from './mcp';
 import type { Stt } from './stt';
+import type { OpenSpeechStream, SpeechStream } from './volc';
 
 /**
  * HTTP API. Every route except `/` and `/api/ping` needs a device token
@@ -33,12 +34,15 @@ export function createApp(opts: {
   hub: Hub;
   ai: Ai | null;
   stt?: Stt | null;
+  /** Streaming speech recognition for `/api/ai/listen`. */
+  openStream?: OpenSpeechStream | null;
   upgradeWebSocket?: UpgradeWebSocket;
   /** Built web app to serve at `/` (same origin as the API). */
   webDir?: string;
 }) {
   const { db, hub, ai } = opts;
   const stt = opts.stt ?? null;
+  const openStream = opts.openStream ?? null;
   const app = new Hono<Env>();
 
   app.use(
@@ -75,8 +79,8 @@ export function createApp(opts: {
       cursor: db.maxSeq(),
       schema: SYNC_SCHEMA,
       ai: ai
-        ? { available: true, model: ai.model, agent: true, speech: !!stt }
-        : { available: false, speech: !!stt },
+        ? { available: true, model: ai.model, agent: true, speech: !!stt, stream: !!openStream }
+        : { available: false, speech: !!stt, stream: !!openStream },
     }),
   );
 
@@ -243,6 +247,83 @@ export function createApp(opts: {
       return c.json({ error: friendlyAiError(e) }, 502);
     }
   });
+
+  // Streaming recognition: the app sends 16 kHz mono 16-bit PCM as binary frames while the user
+  // talks, then `{"type":"end"}`; the server answers with `{"type":"text"}` as the transcript
+  // changes and one `{"type":"final"}` (or `{"type":"error"}`), then closes.
+  if (opts.upgradeWebSocket) {
+    app.get(
+      '/api/ai/listen',
+      opts.upgradeWebSocket((c) => {
+        const hint = (c.req.query('hint') ?? '').slice(0, 800);
+        let stream: SpeechStream | null = null;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        let done = false;
+        return {
+          onOpen(_e, ws) {
+            if (!openStream) {
+              ws.send(
+                JSON.stringify({
+                  type: 'error',
+                  error: 'Streaming speech recognition is not configured on the server',
+                }),
+              );
+              ws.close(1011, 'not configured');
+              return;
+            }
+            const send = (obj: unknown) => {
+              if (!done) ws.send(JSON.stringify(obj));
+            };
+            const s = openStream({
+              hotwords: hint.split(/[\n,，、;；]+/),
+              onText: (text) => send({ type: 'text', text }),
+            });
+            stream = s;
+            s.final.then(
+              (text) => {
+                send({ type: 'final', text });
+                done = true;
+                ws.close(1000);
+              },
+              (e: Error) => {
+                send({ type: 'error', error: friendlyAiError(e) });
+                done = true;
+                ws.close(1011, 'speech failed');
+              },
+            );
+            // Nobody talks to a to-do list for two minutes; don't keep a paid stream open.
+            timer = setTimeout(() => void s.end(), 120_000);
+          },
+          onMessage(e) {
+            if (!stream) return;
+            if (typeof e.data === 'string') {
+              let msg: { type?: string } = {};
+              try {
+                msg = JSON.parse(e.data) as { type?: string };
+              } catch {
+                return;
+              }
+              if (msg.type === 'end') void stream.end();
+              else if (msg.type === 'cancel') stream.close();
+              return;
+            }
+            const data = e.data as ArrayBuffer | Uint8Array;
+            stream.send(data instanceof Uint8Array ? data : new Uint8Array(data));
+          },
+          onClose() {
+            done = true;
+            if (timer) clearTimeout(timer);
+            stream?.close();
+          },
+          onError() {
+            done = true;
+            if (timer) clearTimeout(timer);
+            stream?.close();
+          },
+        };
+      }),
+    );
+  }
 
   // --- MCP ---------------------------------------------------------------------------------------
 

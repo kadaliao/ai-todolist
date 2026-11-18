@@ -6,9 +6,13 @@ import { useSyncStore } from './sync';
  * Speech capture for the assistant.
  *
  * - **System**: the browser's own recognizer (Web Speech API). Free and live as you speak.
- * - **Cloud**: record with MediaRecorder and let the sync server transcribe it
- *   (`/api/ai/transcribe`, better with names). The system recognizer still runs alongside, when
- *   there is one, so you see words while speaking; the server's text replaces them at the end.
+ * - **Cloud**, when the sync server streams (`ai.stream`): 16 kHz PCM goes to `/api/ai/listen` as
+ *   you speak and the text comes back live, final a moment after you stop. A MediaRecorder copy is
+ *   uploaded to `/api/ai/transcribe` only if the stream fails. Cloud is the default then.
+ * - **Cloud** with batch recognition only: record with MediaRecorder and let the sync server
+ *   transcribe it (`/api/ai/transcribe`, better with names). The system recognizer still runs
+ *   alongside, when there is one, so you see words while speaking; the server's text replaces
+ *   them at the end.
  *
  * Push-to-talk stops when the key/button is released. Hands-free stops after a short silence,
  * judged from the microphone level and from new words arriving.
@@ -18,8 +22,11 @@ export type SpeechMode = 'system' | 'cloud';
 
 const KEY = 'docket.speech';
 
+/** The picked recognizer; unpicked means cloud when the server streams, else system. */
 export function speechMode(): SpeechMode {
-  return localStorage.getItem(KEY) === 'cloud' ? 'cloud' : 'system';
+  const picked = localStorage.getItem(KEY);
+  if (picked === 'cloud' || picked === 'system') return picked;
+  return streamSpeechAvailable() ? 'cloud' : 'system';
 }
 
 export function setSpeechMode(mode: SpeechMode): void {
@@ -50,7 +57,13 @@ function recognizerCtor(): (new () => SpeechRec) | null {
 }
 
 export const systemSpeechAvailable = () => !!recognizerCtor();
+export const streamSpeechAvailable = () =>
+  !!useSyncStore.getState().ai?.stream &&
+  typeof WebSocket !== 'undefined' &&
+  typeof AudioContext !== 'undefined';
 export const cloudSpeechAvailable = () =>
+  streamSpeechAvailable() || (!!useSyncStore.getState().ai?.speech && typeof MediaRecorder !== 'undefined');
+const batchSpeechAvailable = () =>
   !!useSyncStore.getState().ai?.speech && typeof MediaRecorder !== 'undefined';
 
 export class VoiceError extends Error {}
@@ -109,6 +122,7 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
     else throw new VoiceError(t('agent.speechUnsupported'));
   }
   const lang = getLocale() === 'zh' ? 'zh-CN' : 'en-US';
+  const streaming = mode === 'cloud' && streamSpeechAvailable();
 
   let ended = false;
   let cancelled = false;
@@ -125,6 +139,7 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
   // --- microphone level (and the stream for cloud recording) ---------------------------------
   let stream: MediaStream | null = null;
   let audio: AudioContext | null = null;
+  let source: MediaStreamAudioSourceNode | null = null;
   let raf = 0;
   /** Only trust "nothing was said" when the level meter is actually running. */
   let meterOk = false;
@@ -146,7 +161,8 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
       meterOk = audio.state === 'running';
       const analyser = audio.createAnalyser();
       analyser.fftSize = 512;
-      audio.createMediaStreamSource(stream).connect(analyser);
+      source = audio.createMediaStreamSource(stream);
+      source.connect(analyser);
       const buf = new Uint8Array(analyser.fftSize);
       const tick = () => {
         analyser.getByteTimeDomainData(buf);
@@ -168,6 +184,7 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
 
   const release = () => {
     cancelAnimationFrame(raf);
+    live?.close();
     for (const id of timers) clearInterval(id);
     for (const tr of stream?.getTracks() ?? []) tr.stop();
     void audio?.close().catch(() => {});
@@ -190,10 +207,25 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
     opts.onEnd({ text: result.text, capture });
   };
 
-  // --- recognizer (system mode, or live preview in cloud mode) -------------------------------
+  // --- streaming to the server (cloud mode on a streaming server) ----------------------------
+  let live: LiveStream | null = null;
+  if (streaming) {
+    if (!audio || !source) {
+      release();
+      throw new VoiceError(t('agent.speechUnsupported'));
+    }
+    live = openLive(audio, source, opts.hints, (text) => {
+      interim = text;
+      spoke = true;
+      lastActivity = Date.now();
+      opts.onPartial(heard());
+    });
+  }
+
+  // --- recognizer (system mode, or live preview in batch cloud mode) -------------------------
   let rec: SpeechRec | null = null;
   let recDone: Promise<void> = Promise.resolve();
-  if (Ctor) {
+  if (Ctor && !streaming) {
     rec = new Ctor();
     rec.lang = lang;
     rec.continuous = true;
@@ -241,7 +273,8 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
 
   // --- cloud recording -----------------------------------------------------------------------
   let recorder: MediaRecorder | null = null;
-  if (mode === 'cloud' && stream) {
+  const keepCopy = !streaming || batchSpeechAvailable();
+  if (mode === 'cloud' && stream && keepCopy && typeof MediaRecorder !== 'undefined') {
     const chunks: Blob[] = [];
     recorder = new MediaRecorder(stream);
     recorder.ondataavailable = (e) => {
@@ -249,6 +282,16 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
     };
     recorder.onstop = async () => {
       if (cancelled) return finish({ text: '' });
+      if (live) {
+        opts.onTranscribing?.();
+        const text = await live.end();
+        if (text !== null) {
+          cloudText = text || undefined;
+          return finish({ text: text || heard() });
+        }
+        if (!batchSpeechAvailable())
+          return finish(heard() ? { text: heard() } : { error: t('agent.speechNetwork') });
+      }
       const blob = new Blob(chunks, { type: recorder?.mimeType || 'audio/webm' });
       // Whisper-style models invent text for silence, so skip uploads with nothing said.
       if ((meterOk && !spoke) || blob.size < 2000) return finish({ text: heard() });
@@ -287,7 +330,14 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
       }, 1500);
     }
     if (recorder && recorder.state !== 'inactive') recorder.stop();
-    if (!rec && !recorder) finish({ text: heard() });
+    else if (live) {
+      opts.onTranscribing?.();
+      void live.end().then((text) => {
+        cloudText = text || undefined;
+        finish(text || heard() ? { text: text || heard() } : { error: t('agent.speechNetwork') });
+      });
+    }
+    if (!rec && !recorder && !live) finish({ text: heard() });
   };
 
   // Hands-free end of speech, and a hard cap for both modes.
@@ -312,6 +362,102 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
       }
       if (recorder && recorder.state !== 'inactive') recorder.stop();
       finish({ text: '' });
+    },
+  };
+}
+
+interface LiveStream {
+  /** Finish the audio; the final text, or `null` when the stream failed. */
+  end(): Promise<string | null>;
+  close(): void;
+}
+
+/** Downsample float audio to 16 kHz 16-bit mono PCM (averaging, good enough for speech). */
+function toPcm16(input: Float32Array, rate: number): ArrayBuffer {
+  const ratio = rate / 16000;
+  const n = Math.floor(input.length / ratio);
+  const out = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const from = Math.floor(i * ratio);
+    const to = Math.min(input.length, Math.floor((i + 1) * ratio));
+    let sum = 0;
+    for (let j = from; j < to; j++) sum += input[j] ?? 0;
+    const v = Math.max(-1, Math.min(1, sum / Math.max(1, to - from)));
+    out[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+  }
+  return out.buffer;
+}
+
+function openLive(
+  audio: AudioContext,
+  source: MediaStreamAudioSourceNode,
+  hints: string[],
+  onText: (text: string) => void,
+): LiveStream {
+  const cfg = useSyncStore.getState().config;
+  if (!cfg) throw new VoiceError(t('agent.unavailable'));
+  const q = new URLSearchParams({ token: cfg.token });
+  const hint = hints.join('、').slice(0, 600);
+  if (hint) q.set('hint', hint);
+  const ws = new WebSocket(`${cfg.url.replace(/\/+$/, '').replace(/^http/, 'ws')}/api/ai/listen?${q}`);
+  ws.binaryType = 'arraybuffer';
+  const queue: (ArrayBuffer | string)[] = [];
+  let settle: (text: string | null) => void = () => {};
+  const final = new Promise<string | null>((r) => {
+    settle = r;
+  });
+  let done = false;
+  const send = (b: ArrayBuffer | string) => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(b);
+    else if (ws.readyState === WebSocket.CONNECTING) queue.push(b);
+  };
+  ws.onopen = () => {
+    for (const b of queue.splice(0)) ws.send(b);
+  };
+  ws.onmessage = (e) => {
+    let msg: { type?: string; text?: string };
+    try {
+      msg = JSON.parse(String(e.data));
+    } catch {
+      return;
+    }
+    if (msg.type === 'text' && typeof msg.text === 'string') onText(msg.text.trim());
+    else if (msg.type === 'final') settle((msg.text ?? '').trim());
+    else if (msg.type === 'error') settle(null);
+  };
+  ws.onerror = () => settle(null);
+  ws.onclose = () => settle(null);
+
+  // ScriptProcessor is deprecated but runs everywhere (including WKWebView) without a module file.
+  const proc = audio.createScriptProcessor(4096, 1, 1);
+  proc.onaudioprocess = (e) => {
+    if (!done) send(toPcm16(e.inputBuffer.getChannelData(0), audio.sampleRate));
+  };
+  source.connect(proc);
+  proc.connect(audio.destination);
+  const stopAudio = () => {
+    if (done) return;
+    done = true;
+    try {
+      source.disconnect(proc);
+      proc.disconnect();
+    } catch {
+      /* already disconnected */
+    }
+  };
+  return {
+    end() {
+      stopAudio();
+      send(JSON.stringify({ type: 'end' }));
+      return Promise.race([final, new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
+    },
+    close() {
+      stopAudio();
+      try {
+        ws.close();
+      } catch {
+        /* closed */
+      }
     },
   };
 }

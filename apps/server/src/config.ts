@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { AiConfig, SttConfig } from './ai';
+import type { VolcConfig } from './volc';
 
 export interface Config {
   port: number;
@@ -8,6 +9,8 @@ export interface Config {
   timeZone: string;
   ai: AiConfig | null;
   stt: SttConfig | null;
+  /** Streaming speech recognition (Volcengine Doubao); the fastest option when set. */
+  volc: VolcConfig | null;
   webDir?: string;
 }
 
@@ -19,6 +22,9 @@ export interface Config {
  *   Cloud speech recognition (optional; devices default to the system recognizer):
  *   DOCKET_STT_MODEL (or the older DOCKET_AI_STT_MODEL) · DOCKET_STT_BASE_URL · DOCKET_STT_API_KEY
  *   (the last two default to the DOCKET_AI_* values, for providers that do both)
+ *   Streaming speech recognition, text while you talk (optional, preferred by the apps when set):
+ *   DOCKET_VOLC_SPEECH_APP_ID · DOCKET_VOLC_SPEECH_ACCESS_KEY (Volcengine 豆包语音 console)
+ *   DOCKET_VOLC_SPEECH_RESOURCE (volc.bigasr.sauc.duration; volc.seedasr.sauc.duration for model 2.0)
  *   DOCKET_WEB_DIR (optional: serve the built web app from this directory at `/`)
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -36,6 +42,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const sttBase = env.DOCKET_STT_BASE_URL ?? env.DOCKET_AI_BASE_URL;
   const sttKey = env.DOCKET_STT_API_KEY ?? env.DOCKET_AI_API_KEY;
   const stt = sttModel && sttBase && sttKey ? { baseURL: sttBase, apiKey: sttKey, model: sttModel } : null;
+  const volc =
+    env.DOCKET_VOLC_SPEECH_APP_ID && env.DOCKET_VOLC_SPEECH_ACCESS_KEY
+      ? {
+          appId: env.DOCKET_VOLC_SPEECH_APP_ID,
+          accessKey: env.DOCKET_VOLC_SPEECH_ACCESS_KEY,
+          resourceId: env.DOCKET_VOLC_SPEECH_RESOURCE ?? 'volc.bigasr.sauc.duration',
+        }
+      : null;
   return {
     port: Number(env.DOCKET_PORT ?? 8787),
     host: env.DOCKET_HOST ?? '0.0.0.0',
@@ -43,6 +57,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     timeZone: env.DOCKET_TZ ?? env.TZ ?? 'Asia/Shanghai',
     ai,
     stt,
+    volc,
     ...(env.DOCKET_WEB_DIR ? { webDir: env.DOCKET_WEB_DIR } : {}),
   };
 }

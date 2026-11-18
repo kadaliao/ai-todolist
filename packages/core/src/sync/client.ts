@@ -38,7 +38,9 @@ export interface SyncClientOptions {
   token: string;
   storage: SyncStorage;
   onStatus?: (status: SyncStatus) => void;
-  onHealth?: (health: { ai?: { available: boolean; model?: string; speech?: boolean } }) => void;
+  onHealth?: (health: {
+    ai?: { available: boolean; model?: string; speech?: boolean; stream?: boolean };
+  }) => void;
   /** Subscribe to connectivity changes; return an unsubscribe function. */
   connectivity?: (onChange: (online: boolean) => void) => () => void;
   isOnline?: () => boolean;

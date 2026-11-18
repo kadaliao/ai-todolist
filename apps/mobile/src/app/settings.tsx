@@ -19,7 +19,7 @@ import { requestPermission, setNotifySettings, useNotify } from '../state/notifi
 import { useReplica } from '../state/replica';
 import { setSetting } from '../state/storage';
 import { connectSync, disconnectSync, syncNow, useSync } from '../state/sync';
-import { getVoiceWords, setSpeechMode, setVoiceWords, useVoice } from '../state/voice';
+import { effectiveSpeechMode, getVoiceWords, setSpeechMode, setVoiceWords, useVoice } from '../state/voice';
 import { useColors } from '../theme';
 import { WIDGET_NAME } from '../widget/android';
 
@@ -29,8 +29,10 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const sync = useSync();
   const notify = useNotify();
-  const speechMode = useVoice((s) => s.mode);
-  const cloudAvailable = !!sync.ai?.speech;
+  useVoice((s) => s.mode);
+  const speechMode = effectiveSpeechMode();
+  const streaming = !!sync.ai?.stream;
+  const cloudAvailable = !!sync.ai?.speech || streaming;
   const [words, setWords] = useState(() => getVoiceWords().join('\n'));
   const [url, setUrl] = useState(sync.config?.url ?? '');
   const [token, setToken] = useState(sync.config?.token ?? '');
@@ -195,7 +197,7 @@ export default function SettingsScreen() {
       <Group title={t('agent.speech')}>
         <Row label={zh ? '识别方式' : 'Recognizer'}>
           <Segmented
-            value={speechMode === 'cloud' && cloudAvailable ? 'cloud' : 'system'}
+            value={speechMode}
             options={[
               ['system', t('agent.speech.system')],
               ['cloud', t('agent.speech.cloud')],
@@ -206,7 +208,11 @@ export default function SettingsScreen() {
         </Row>
         <Txt variant="meta" style={styles.help}>
           {`${t('agent.speech.system')}：${t('agent.speech.systemHelp')}\n${t('agent.speech.cloud')}：${
-            cloudAvailable ? t('agent.speech.cloudHelp') : t('agent.speech.cloudOff')
+            streaming
+              ? t('agent.speech.streamHelp')
+              : cloudAvailable
+                ? t('agent.speech.cloudHelp')
+                : t('agent.speech.cloudOff')
           }`.replaceAll('：', zh ? '：' : ': ')}
         </Txt>
         <TextInput

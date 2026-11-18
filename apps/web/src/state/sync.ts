@@ -14,7 +14,7 @@ interface SyncStore {
   state: SyncState | 'off';
   message: string;
   config: SyncConfig | null;
-  ai: { available: boolean; model?: string; agent?: boolean; speech?: boolean } | null;
+  ai: { available: boolean; model?: string; agent?: boolean; speech?: boolean; stream?: boolean } | null;
   lastSync: number | null;
 }
 
@@ -39,14 +39,33 @@ let client: SyncClient | null = null;
 
 function startClient(replica: Replica, config: SyncConfig): Promise<void> {
   client?.stop();
-  useSyncStore.setState({ state: 'connecting', config });
+  // What the server could do last time, so a session started right away (push to talk at
+  // launch) picks the right recognizer before the first health check answers.
+  let known: (SyncStore['ai'] & { url?: string }) | null = null;
+  try {
+    known = JSON.parse(localStorage.getItem('docket.serverAi') ?? 'null');
+  } catch {
+    known = null;
+  }
+  useSyncStore.setState({
+    state: 'connecting',
+    config,
+    ...(known && known.url === config.url && !useSyncStore.getState().ai ? { ai: known } : {}),
+  });
   client = new SyncClient({
     replica,
     url: config.url,
     token: config.token,
     storage: { get: getSetting, set: setSetting },
     onStatus: (s) => useSyncStore.setState({ state: s.state, message: s.message, lastSync: s.lastSync }),
-    onHealth: (h) => useSyncStore.setState({ ai: h.ai ?? null }),
+    onHealth: (h) => {
+      useSyncStore.setState({ ai: h.ai ?? null });
+      try {
+        localStorage.setItem('docket.serverAi', JSON.stringify(h.ai ? { ...h.ai, url: config.url } : null));
+      } catch {
+        /* storage full or blocked */
+      }
+    },
     isOnline: () => navigator.onLine,
     connectivity: (cb) => {
       const on = () => cb(true);

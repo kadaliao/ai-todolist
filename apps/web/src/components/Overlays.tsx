@@ -307,7 +307,8 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
 }
 
 function SpeechSetting() {
-  const cloud = useSyncStore((s) => !!s.ai?.speech);
+  const streaming = useSyncStore((s) => !!s.ai?.stream);
+  const cloud = useSyncStore((s) => !!s.ai?.speech || !!s.ai?.stream);
   const [mode, setMode] = useState(speechMode);
   const pick = (m: SpeechMode) => {
     setSpeechMode(m);
@@ -341,7 +342,11 @@ function SpeechSetting() {
       {option(
         'cloud',
         t('agent.speech.cloud'),
-        cloud ? t('agent.speech.cloudHelp') : t('agent.speech.cloudOff'),
+        streaming
+          ? t('agent.speech.streamHelp')
+          : cloud
+            ? t('agent.speech.cloudHelp')
+            : t('agent.speech.cloudOff'),
         !cloud && mode !== 'cloud',
       )}
     </div>

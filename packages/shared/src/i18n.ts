@@ -256,7 +256,8 @@ const zh = {
   'agent.speech.systemHelp': '免费，边说边出字，部分设备可离线',
   'agent.speech.cloud': '云端识别',
   'agent.speech.cloudHelp': '人名、专有名词更准；由同步服务器转写',
-  'agent.speech.cloudOff': '服务器没有配置云端识别（DOCKET_STT_MODEL）',
+  'agent.speech.streamHelp': '边说边出字，说完马上好，人名更准；音频经同步服务器转给识别服务',
+  'agent.speech.cloudOff': '服务器没有配置云端识别（DOCKET_VOLC_SPEECH_* 或 DOCKET_STT_MODEL）',
   'agent.toast.applied': '助手改了 {n} 处',
   'agent.words': '常用词',
   'agent.words.help': '常说的人名、地名、项目名，一行一个或用逗号隔开。识别和助手都会按这里的写法来。',
@@ -608,7 +609,10 @@ const en: Record<MessageKey, string> = {
   'agent.speech.systemHelp': 'Free, live as you speak, offline on some devices',
   'agent.speech.cloud': 'Cloud',
   'agent.speech.cloudHelp': 'Better with names; transcribed by your sync server',
-  'agent.speech.cloudOff': 'The server has no cloud recognition configured (DOCKET_STT_MODEL)',
+  'agent.speech.streamHelp':
+    'Live as you speak, done the moment you stop, better with names; audio goes through your sync server',
+  'agent.speech.cloudOff':
+    'The server has no cloud recognition configured (DOCKET_VOLC_SPEECH_* or DOCKET_STT_MODEL)',
   'agent.toast.applied': 'Assistant made {n} changes',
   'agent.words': 'Vocabulary',
   'agent.words.help':

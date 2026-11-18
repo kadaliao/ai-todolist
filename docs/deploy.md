@@ -58,7 +58,19 @@ DOCKET_AI_BASE_URL=… DOCKET_AI_API_KEY=… DOCKET_AI_MODEL=… pnpm --filter @
 
 ### 云端语音识别（可选）
 
-各设备默认用系统自带的语音识别，不需要服务器参与。想让人名、专有名词更准，可以在服务器上配一个 OpenAI 兼容的 `/audio/transcriptions` 接口，然后在应用的 设置 → AI → 语音识别 里选“云端识别”：
+不配的话，各设备用系统自带的语音识别。系统识别在国内常常慢（iPhone 的系统识别要连 Apple 的服务器），推荐配流式识别。
+
+**流式识别（推荐）**：说话时音频就一路传给服务器，再转给火山引擎的豆包流式语音识别，字边说边出，说完 0.3–0.6 秒就是最终结果。配了它，各设备默认就用云端识别（设置里还能改回系统识别）。在[火山引擎豆包语音控制台](https://console.volcengine.com/speech/app)建一个应用，开通“大模型流式语音识别”：
+
+| 变量                            | 说明                                                                                    |
+| ------------------------------- | --------------------------------------------------------------------------------------- |
+| `DOCKET_VOLC_SPEECH_APP_ID`     | 应用的 APP ID                                                                           |
+| `DOCKET_VOLC_SPEECH_ACCESS_KEY` | 应用的 Access Token                                                                     |
+| `DOCKET_VOLC_SPEECH_RESOURCE`   | 不填为 `volc.bigasr.sauc.duration`（1.0 模型）；2.0 模型填 `volc.seedasr.sauc.duration` |
+
+实测（7.5 秒的中文，服务器在美国）：最后一个字说完到出最终结果 0.25–0.6 秒；同一句用 `whisper-1` 整段上传要 1–4 秒。项目名、标签名和设置里的常用词作为热词发过去。流式识别要 WebSocket，反向代理要放行 `/api/ai/listen` 的升级请求（Caddy 默认就行）。
+
+**整段转写**：也可以配一个 OpenAI 兼容的 `/audio/transcriptions` 接口，说完后整段上传。只配它时，在应用的 设置 → AI → 语音识别 里选“云端识别”才会用；和流式识别一起配时，它是流式识别失败时的后备：
 
 | 变量                  | 说明                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------- |
@@ -66,7 +78,7 @@ DOCKET_AI_BASE_URL=… DOCKET_AI_API_KEY=… DOCKET_AI_MODEL=… pnpm --filter @
 | `DOCKET_STT_BASE_URL` | 不填则用 `DOCKET_AI_BASE_URL`（DeepSeek 没有语音接口，要另填）                        |
 | `DOCKET_STT_API_KEY`  | 不填则用 `DOCKET_AI_API_KEY`                                                          |
 
-实测 aihubmix 的 `whisper-1`：一句 5 秒的中文约 1.5 秒返回（第一次调用可能慢很多）。旧的 `DOCKET_AI_STT_MODEL` 仍然有效，等同于 `DOCKET_STT_MODEL`。项目名和标签名会作为提示词一起发给识别模型。
+aihubmix 的 `whisper-1`：一句 5 秒的中文约 1.5 秒返回（第一次调用可能慢很多）。旧的 `DOCKET_AI_STT_MODEL` 仍然有效，等同于 `DOCKET_STT_MODEL`。项目名和标签名会作为提示词一起发给识别模型。
 
 注意：网页版在 Chrome 里的“系统识别”其实是把声音发到 Google 的服务器识别，国内网络下往往用不了，这时请改用云端识别；Safari 和手机应用用的是系统自己的识别。
 

@@ -10,6 +10,7 @@ import {
 import { Platform } from 'react-native';
 import { makeMutable, withTiming } from 'react-native-reanimated';
 import { create } from 'zustand';
+import { DocketMic, type MicResult } from '../../modules/docket-mic';
 import { getReplica } from './actions';
 import { journalEnabled, keepAudio } from './journal';
 import { getSetting, setSetting } from './storage';
@@ -20,17 +21,30 @@ import { useSync } from './sync';
  *
  * - **System** (default): the platform recognizer (SFSpeechRecognizer / Android SpeechRecognizer),
  *   free, with live partial results; project and label names are passed as contextual strings.
- * - **Cloud**: the same recognizer runs for the live preview while the audio is recorded to a
- *   file, which the sync server transcribes (`/api/ai/transcribe`); its text wins, and the system
- *   text is the fallback when the upload fails.
+ * - **Cloud**: when the sync server has a streaming recognizer (`ai.stream`), the microphone audio
+ *   goes to it as you talk (`/api/ai/listen`, native `DocketMic` capture) and the text comes back
+ *   live; it's final a moment after you stop. If the stream fails, the recording is uploaded
+ *   instead (`/api/ai/transcribe`). Servers with only batch recognition get the older path: the
+ *   system recognizer for the live preview, then the recording is transcribed.
+ *   Cloud is the default whenever the server streams.
  *
  * Push-to-talk stops when the finger lifts; hands-free stops after a short silence.
  */
 
 export type SpeechMode = 'system' | 'cloud';
 
-export function getSpeechMode(): SpeechMode {
-  return getSetting<SpeechMode>('speech.mode') ?? 'system';
+/** What the user picked; `null` = not picked (cloud when the server streams, else system). */
+export function getSpeechMode(): SpeechMode | null {
+  return getSetting<SpeechMode>('speech.mode') ?? null;
+}
+
+/** The recognizer `listen` will use. */
+export function effectiveSpeechMode(): SpeechMode {
+  const ai = useSync.getState().ai;
+  const picked = useVoice.getState().mode;
+  if (picked === 'cloud') return ai?.stream || ai?.speech ? 'cloud' : 'system';
+  if (picked === 'system') return 'system';
+  return ai?.stream && DocketMic ? 'cloud' : 'system';
 }
 
 export function setSpeechMode(mode: SpeechMode): void {
@@ -63,7 +77,7 @@ interface VoiceState {
   text: string;
   handsFree: boolean;
   error: string | null;
-  mode: SpeechMode;
+  mode: SpeechMode | null;
 }
 
 export const useVoice = create<VoiceState>(() => ({
@@ -96,6 +110,16 @@ interface Session {
   startedAt: number;
   releasedAt: number | null;
   handsFree: boolean;
+  /** Streaming to the server instead of running the platform recognizer. */
+  stream: StreamLink | null;
+}
+
+interface StreamLink {
+  ws: WebSocket;
+  subs: { remove(): void }[];
+  queue: (ArrayBuffer | string)[];
+  final: Promise<string | null>;
+  failed: boolean;
 }
 
 let session: Session | null = null;
@@ -139,7 +163,8 @@ function armSilence(s: Session, ms: number): void {
   s.silence = setTimeout(() => {
     if (session === s && useVoice.getState().handsFree) {
       s.releasedAt ??= Date.now();
-      ExpoSpeechRecognitionModule.stop();
+      if (s.stream) void finishStream(s);
+      else ExpoSpeechRecognitionModule.stop();
     }
   }, ms);
 }
@@ -199,6 +224,7 @@ function wire(): void {
 }
 
 async function finish(s: Session): Promise<void> {
+  if (s.stream) return finishStream(s);
   if (s.silence) clearTimeout(s.silence);
   s.releasedAt ??= Date.now();
   voiceLevel.value = withTiming(0, { duration: 150 });
@@ -242,6 +268,181 @@ async function finish(s: Session): Promise<void> {
   }
   const error = text ? null : (s.error ?? t('agent.noSpeech'));
   useVoice.setState({ status: 'idle', text, handsFree: false, error });
+  s.resolve(text || null);
+}
+
+// --- streaming to the server ---------------------------------------------------------------------
+
+function toArrayBuffer(b64: string): ArrayBuffer {
+  const bin = globalThis.atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
+function hintParam(): string {
+  const zh = getLocale() === 'zh';
+  return vocabulary()
+    .join(zh ? '、' : ', ')
+    .slice(0, 600);
+}
+
+/** Open the server's recognizer and start the microphone; text arrives as the user talks. */
+async function startStream(s: Session): Promise<void> {
+  const cfg = useSync.getState().config;
+  const mic = DocketMic;
+  if (!cfg || !mic) throw new Error(t('agent.speechUnsupported'));
+  const hint = hintParam();
+  const url = `${cfg.url.replace(/^http/, 'ws')}/api/ai/listen?token=${encodeURIComponent(cfg.token)}${
+    hint ? `&hint=${encodeURIComponent(hint)}` : ''
+  }`;
+  const ws = new WebSocket(url);
+  ws.binaryType = 'arraybuffer';
+  let settled = false;
+  let resolveFinal!: (text: string | null) => void;
+  const settle = (text: string | null) => {
+    settled = true;
+    resolveFinal(text);
+  };
+  const link: StreamLink = {
+    ws,
+    subs: [],
+    queue: [],
+    failed: false,
+    final: new Promise<string | null>((r) => {
+      resolveFinal = r;
+    }),
+  };
+  s.stream = link;
+  const fail = (why: string) => {
+    // The socket closing after the final text is the normal end.
+    if (link.failed || settled) return;
+    link.failed = true;
+    console.warn('speech stream failed', why);
+    settle(null);
+  };
+  ws.onopen = () => {
+    for (const b of link.queue) ws.send(b);
+    link.queue = [];
+  };
+  ws.onmessage = (e) => {
+    let msg: { type?: string; text?: string; error?: string };
+    try {
+      msg = JSON.parse(String(e.data));
+    } catch {
+      return;
+    }
+    if (msg.type === 'text' && typeof msg.text === 'string') {
+      s.partial = msg.text.trim();
+      if (session === s) useVoice.setState({ text: current(s) });
+      if (s.partial && useVoice.getState().handsFree) armSilence(s, SILENCE_MS);
+    } else if (msg.type === 'final') {
+      settle((msg.text ?? '').trim());
+    } else if (msg.type === 'error') fail(msg.error ?? 'error');
+  };
+  ws.onerror = () => fail('socket error');
+  ws.onclose = () => fail('closed');
+
+  link.subs.push(
+    mic.addListener('onAudio', (e) => {
+      voiceLevel.value = withTiming(e.level, { duration: 90 });
+      if (link.failed) return;
+      const buf = toArrayBuffer(e.data);
+      if (ws.readyState === WebSocket.OPEN) ws.send(buf);
+      else if (ws.readyState === WebSocket.CONNECTING) link.queue.push(buf);
+    }),
+    mic.addListener('onEnd', () => {
+      if (session === s) stopListening();
+    }),
+  );
+  await mic.start();
+  // Lifted or cancelled while the microphone was starting.
+  if (finishing === s || session !== s) {
+    mic.cancel();
+    return;
+  }
+  s.startedAt = Date.now();
+  if (session === s) useVoice.setState({ status: 'listening' });
+}
+
+let finishing: Session | null = null;
+
+async function finishStream(s: Session): Promise<void> {
+  if (finishing === s) return;
+  finishing = s;
+  const link = s.stream;
+  if (!link) return;
+  if (s.silence) clearTimeout(s.silence);
+  s.releasedAt ??= Date.now();
+  voiceLevel.value = withTiming(0, { duration: 150 });
+  let rec: MicResult = {};
+  try {
+    if (s.cancelled) DocketMic?.cancel();
+    else rec = (await DocketMic?.stop()) ?? {};
+  } catch (e) {
+    console.warn('microphone stop failed', e);
+  }
+  // The last chunk's event may still be on its way.
+  await new Promise((r) => setTimeout(r, 60));
+  for (const sub of link.subs) sub.remove();
+
+  let text = '';
+  let cloud: string | null | undefined;
+  if (!s.cancelled) {
+    useVoice.setState({ status: 'transcribing' });
+    if (link.ws.readyState === WebSocket.OPEN) link.ws.send(JSON.stringify({ type: 'end' }));
+    else if (link.ws.readyState === WebSocket.CONNECTING) link.queue.push(JSON.stringify({ type: 'end' }));
+    cloud = await Promise.race([link.final, new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
+    // The stream failed or stalled: transcribe the recording instead, if the server can.
+    if (cloud == null && rec.uri && useSync.getState().ai?.speech)
+      cloud = await transcribeFile(rec.uri, s.partial);
+    text = (cloud ?? s.partial).trim();
+  } else {
+    try {
+      link.ws.send(JSON.stringify({ type: 'cancel' }));
+    } catch {
+      /* not open */
+    }
+  }
+  try {
+    link.ws.close();
+  } catch {
+    /* already closed */
+  }
+
+  let audio: string | undefined;
+  if (rec.uri) {
+    if (!s.cancelled && text && journalEnabled()) audio = keepAudio(rec.uri);
+    else {
+      try {
+        new File(rec.uri).delete();
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+  lastCapture =
+    !s.cancelled && text
+      ? {
+          mode: 'cloud',
+          system: '',
+          ...(cloud ? { cloud } : {}),
+          ...(audio ? { audio } : {}),
+          startedAt: s.startedAt,
+          releasedAt: s.releasedAt,
+          textAt: Date.now(),
+          handsFree: s.handsFree,
+        }
+      : null;
+  if (session === s) session = null;
+  if (finishing === s) finishing = null;
+  if (s.cancelled) {
+    useVoice.setState({ status: 'idle', text: '', handsFree: false, error: null });
+    s.resolve(null);
+    return;
+  }
+  const error = text ? null : link.failed && !s.partial ? t('agent.speechNetwork') : t('agent.noSpeech');
+  useVoice.setState({ status: 'idle', text, handsFree: false, error: text ? null : error });
   s.resolve(text || null);
 }
 
@@ -306,6 +507,9 @@ export async function listen(opts: { handsFree: boolean }): Promise<string | nul
   } catch {
     available = false;
   }
+  if (effectiveSpeechMode() === 'cloud' && DocketMic && useSync.getState().ai?.stream) {
+    return listenStreaming(opts, fail);
+  }
   if (!available) return fail(t('agent.speechUnsupported'));
   const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
   if (!perm.granted) return fail(t('agent.micDenied'));
@@ -314,7 +518,7 @@ export async function listen(opts: { handsFree: boolean }): Promise<string | nul
   warmUp();
 
   const cloud =
-    useVoice.getState().mode === 'cloud' &&
+    effectiveSpeechMode() === 'cloud' &&
     !!useSync.getState().ai?.speech &&
     (Platform.OS === 'web' ? false : ExpoSpeechRecognitionModule.supportsRecording());
   const zh = getLocale() === 'zh';
@@ -334,6 +538,7 @@ export async function listen(opts: { handsFree: boolean }): Promise<string | nul
       startedAt: Date.now(),
       releasedAt: null,
       handsFree: opts.handsFree,
+      stream: null,
     };
     session = s;
     try {
@@ -360,6 +565,51 @@ export async function listen(opts: { handsFree: boolean }): Promise<string | nul
   });
 }
 
+async function listenStreaming(
+  opts: { handsFree: boolean },
+  fail: (message: string) => null,
+): Promise<string | null> {
+  const perm = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
+  if (!perm.granted) return fail(t('agent.micDenied'));
+  if (useVoice.getState().status !== 'starting') return null;
+  lastCapture = null;
+  return new Promise<string | null>((resolve) => {
+    const s: Session = {
+      committed: '',
+      partial: '',
+      uri: null,
+      cancelled: false,
+      cloud: true,
+      record: true,
+      error: null,
+      resolve,
+      silence: null,
+      startedAt: Date.now(),
+      releasedAt: null,
+      handsFree: opts.handsFree,
+      stream: null,
+    };
+    session = s;
+    startStream(s).then(
+      () => {
+        if (session !== s) return;
+        if (useVoice.getState().handsFree) armSilence(s, NOTHING_MS);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      },
+      (e: Error) => {
+        for (const sub of s.stream?.subs ?? []) sub.remove();
+        try {
+          s.stream?.ws.close();
+        } catch {
+          /* not open */
+        }
+        if (session === s) session = null;
+        resolve(fail(e.message || t('agent.speechUnsupported')));
+      },
+    );
+  });
+}
+
 /** Switch a running push-to-talk session to hands-free (the press turned out to be a tap). */
 export function goHandsFree(): void {
   useVoice.setState({ handsFree: true });
@@ -373,14 +623,18 @@ export function goHandsFree(): void {
 export function stopListening(): void {
   if (session) {
     session.releasedAt ??= Date.now();
-    ExpoSpeechRecognitionModule.stop();
+    if (session.stream) void finishStream(session);
+    else ExpoSpeechRecognitionModule.stop();
   } else if (useVoice.getState().status === 'starting') useVoice.setState({ status: 'idle' });
 }
 
 /** End the session and throw away what was said. */
 export function cancelListening(): void {
   const s = session;
-  if (s) {
+  if (s?.stream) {
+    s.cancelled = true;
+    void finishStream(s);
+  } else if (s) {
     s.cancelled = true;
     ExpoSpeechRecognitionModule.abort();
     // Some platforms don't send `end` after abort; make sure the session closes.
