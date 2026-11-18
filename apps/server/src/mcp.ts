@@ -23,7 +23,7 @@ const DESCRIPTIONS: Record<string, string> = {
 };
 
 export function createMcpServer(hub: Hub): McpServer {
-  const server = new McpServer({ name: 'docket', version: '1.2.0' }, { capabilities: { tools: {} } });
+  const server = new McpServer({ name: 'docket', version: '1.3.0' }, { capabilities: { tools: {} } });
 
   for (const tool of AGENT_TOOLS) {
     if (tool.appOnly) continue;
