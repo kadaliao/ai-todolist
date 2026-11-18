@@ -15,7 +15,13 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Docket uses the microphone when you talk to it to add or change tasks.",
         "NSSpeechRecognitionUsageDescription": "Docket turns what you say into text so it can add and change your tasks.",
-        "NSPhotoLibraryUsageDescription": "Docket doesn’t access your photo library."
+        "NSPhotoLibraryUsageDescription": "Docket doesn’t access your photo library.",
+        "INAlternativeAppNames": [
+          {
+            "INAlternativeAppName": "小当家",
+            "INAlternativeAppNamePronunciationHint": "xiǎo dāng jiā"
+          }
+        ]
       },
       "entitlements": {
         "com.apple.security.application-groups": ["group.com.kadaliao.docket"]

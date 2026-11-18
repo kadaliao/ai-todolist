@@ -1,6 +1,9 @@
 // Siri / Shortcuts for the main app target: the Swift file next to this one (the “记一下”
 // intent and the App Shortcuts provider) and the localized Siri phrases (AppShortcuts.strings).
 // The intent that opens the app lives in targets/widget/_shared (it must be in both targets).
+// Siri's ${applicationName} also matches the app's alternative names (INAlternativeAppNames in
+// app.json): in Chinese the assistant answers to “小当家”, which Siri hears far more reliably
+// than “Docket”.
 const fs = require('node:fs');
 const path = require('node:path');
 const { IOSConfig, withXcodeProject } = require('expo/config-plugins');
@@ -16,12 +19,14 @@ const PHRASES = {
   'zh-Hans': {
     [`Talk to ${APP}`]: `跟${APP}说`,
     [`Tell ${APP}`]: `告诉${APP}`,
+    [`Ask ${APP}`]: `问问${APP}`,
     [`Open ${APP} and listen`]: `打开${APP}听我说`,
     [`Add to ${APP}`]: `用${APP}记一下`,
+    [`Remember with ${APP}`]: `让${APP}记一下`,
     [`Note in ${APP}`]: `在${APP}里记一下`,
     [`Add a task in ${APP}`]: `在${APP}里加个任务`,
-    'Talk to Docket': '跟 Docket 说',
-    'Add to Docket': '记一下',
+    'Talk to Docket': '跟小当家说',
+    'Add to Docket': '让小当家记一下',
   },
 };
 

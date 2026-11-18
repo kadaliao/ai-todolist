@@ -42,6 +42,7 @@ struct DocketShortcuts: AppShortcutsProvider {
       phrases: [
         "Talk to \(.applicationName)",
         "Tell \(.applicationName)",
+        "Ask \(.applicationName)",
         "Open \(.applicationName) and listen",
       ],
       shortTitle: "Talk to Docket",
@@ -51,6 +52,7 @@ struct DocketShortcuts: AppShortcutsProvider {
       intent: AddToDocketIntent(),
       phrases: [
         "Add to \(.applicationName)",
+        "Remember with \(.applicationName)",
         "Note in \(.applicationName)",
         "Add a task in \(.applicationName)",
       ],
