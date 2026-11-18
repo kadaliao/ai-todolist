@@ -40,6 +40,8 @@ export interface SyncClientOptions {
   onStatus?: (status: SyncStatus) => void;
   onHealth?: (health: {
     ai?: { available: boolean; model?: string; speech?: boolean; stream?: boolean };
+    /** Pairing codes and the device list (servers from 1.4). */
+    pair?: boolean;
   }) => void;
   /** Subscribe to connectivity changes; return an unsubscribe function. */
   connectivity?: (onChange: (online: boolean) => void) => () => void;

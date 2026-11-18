@@ -40,7 +40,14 @@ const server = serve({ fetch: root.fetch, port: config.port, hostname: config.ho
   console.log(
     `  data: ${config.dbPath} · ops: ${db.maxSeq()} · devices: ${devices} · AI: ${ai ? ai.model : 'off'} · speech: ${[volc ? 'streaming (Volcengine)' : '', stt ? stt.model : ''].filter(Boolean).join(' + ') || 'system only'}`,
   );
-  if (!devices) console.log('  No device tokens yet. Create one with: node dist/cli.js token create <name>');
+  if (!devices) {
+    // The first device can't pair from another one: print a code it can use (an hour, once).
+    const { code } = db.createPairing('startup', 60 * 60 * 1000);
+    console.log(
+      `  No devices yet. In Docket → Settings → Sync, enter this server’s address and the pairing code ${code} (valid for an hour).`,
+    );
+    console.log('  A new code any time: node dist/cli.js pair');
+  }
 });
 injectWebSocket(server);
 

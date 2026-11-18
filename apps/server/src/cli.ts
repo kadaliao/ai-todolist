@@ -6,6 +6,7 @@ import { Db } from './db';
  *   docket-server token create <name>   print a new token (shown once)
  *   docket-server token list
  *   docket-server token revoke <name>
+ *   docket-server pair                   print a one-time pairing code for a new device (10 min)
  *   docket-server backup [file]          consistent copy of the database
  */
 
@@ -20,8 +21,17 @@ if (cmd === 'backup') {
 }
 const db = new Db(loadConfig().dbPath);
 
+if (cmd === 'pair') {
+  const { code } = db.createPairing('cli');
+  console.log(
+    `Pairing code (one use, 10 minutes): ${code}\n\nIn Docket → Settings → Sync, enter this server’s address and the code.`,
+  );
+  db.close();
+  process.exit(0);
+}
+
 function usage(): never {
-  console.log('usage: cli token create <name> | token list | token revoke <name> | backup [file]');
+  console.log('usage: cli token create <name> | token list | token revoke <name> | pair | backup [file]');
   process.exit(1);
 }
 

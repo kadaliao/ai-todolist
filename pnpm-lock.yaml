@@ -257,6 +257,9 @@ importers:
       fractional-indexing-jittered:
         specifier: ^1.1.0
         version: 1.1.0
+      qrcode-generator:
+        specifier: 2.0.4
+        version: 2.0.4
       rrule-temporal:
         specifier: ^2.2.8
         version: 2.2.8
@@ -8103,6 +8106,10 @@ packages:
   /pure-rand@8.4.2:
     resolution: {integrity: sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng==}
     dev: true
+
+  /qrcode-generator@2.0.4:
+    resolution: {integrity: sha512-mZSiP6RnbHl4xL2Ap5HfkjLnmxfKcPWpWe/c+5XxCuetEenqmNFf1FH/ftXPCtFG5/TDobjsjz6sSNL0Sr8Z9g==}
+    dev: false
 
   /qs@6.17.1:
     resolution: {integrity: sha512-jd3COkaKVgGUW+ZHyEHCG9bH7RoaaiWuMgzsIBjUMVjLAaWGWpoUAVwljVvBHxRu/2qEHnadLGZrkutYUBPQJA==}

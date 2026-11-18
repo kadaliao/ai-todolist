@@ -32,6 +32,19 @@ export {
   type SyncStorage,
 } from './sync/client';
 export { createClock, decode as decodeHlc, type Hlc, type HlcState } from './sync/hlc';
+export {
+  createPairing,
+  type DeviceInfo,
+  isPairingCode,
+  listDevices,
+  type PairingLink,
+  pairingLink,
+  parsePairingLink,
+  qrMatrix,
+  qrPath,
+  redeemPairing,
+  removeDevice,
+} from './sync/pairing';
 export { type Cell, type Json, type Mutation, type Op, Store } from './sync/store';
 export * from './time';
 export * from './views';

@@ -13,7 +13,7 @@ import type { Stt } from './stt';
 import type { OpenSpeechStream, SpeechStream } from './volc';
 
 /**
- * HTTP API. Every route except `/` and `/api/ping` needs a device token
+ * HTTP API. Every route except `/`, `/api/ping` and `/api/pair` needs a device token
  * (`Authorization: Bearer dk_…`, or `?token=` for the WebSocket).
  */
 
@@ -56,8 +56,26 @@ export function createApp(opts: {
 
   app.get('/api/ping', (c) => c.json({ ok: true, name: 'docket-server' }));
 
+  // --- pairing: a new device trades a one-time code for its own token ---------------------------
+
+  const failures: number[] = [];
+  app.post('/api/pair', bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
+    const now = Date.now();
+    while (failures.length && (failures[0] ?? 0) < now - 60_000) failures.shift();
+    if (failures.length >= 30) return c.json({ error: 'too many attempts; wait a minute' }, 429);
+    const body = (await c.req.json().catch(() => null)) as { code?: unknown; name?: unknown } | null;
+    const code = typeof body?.code === 'string' ? body.code : '';
+    const name = typeof body?.name === 'string' ? body.name : '';
+    const paired = code ? db.redeemPairing(code, name) : null;
+    if (!paired) {
+      failures.push(now);
+      return c.json({ error: 'invalid or expired pairing code' }, 401);
+    }
+    return c.json(paired);
+  });
+
   app.use('/api/*', async (c, next) => {
-    if (c.req.path === '/api/ping') return next();
+    if (c.req.path === '/api/ping' || c.req.path === '/api/pair') return next();
     const header = c.req.header('Authorization') ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : (c.req.query('token') ?? '');
     const device = db.verifyToken(token);
@@ -81,8 +99,26 @@ export function createApp(opts: {
       ai: ai
         ? { available: true, model: ai.model, agent: true, speech: !!stt, stream: !!openStream }
         : { available: false, speech: !!stt, stream: !!openStream },
+      /** Supports `/api/devices` and pairing codes. */
+      pair: true,
     }),
   );
+
+  // --- devices -----------------------------------------------------------------------------------
+
+  app.get('/api/devices', (c) => {
+    const me = c.get('device').name;
+    return c.json({ devices: db.listDevices().map((d) => ({ ...d, current: d.name === me })) });
+  });
+
+  app.post('/api/devices/pair', (c) => c.json(db.createPairing(c.get('device').name)));
+
+  app.delete('/api/devices/:name', (c) => {
+    const name = c.req.param('name');
+    if (name === c.get('device').name)
+      return c.json({ error: 'this is the device you are using; disconnect it in its settings' }, 400);
+    return db.revokeToken(name) ? c.json({ ok: true }) : c.json({ error: 'no such device' }, 404);
+  });
 
   // --- sync -------------------------------------------------------------------------------------
 

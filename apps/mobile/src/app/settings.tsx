@@ -1,3 +1,4 @@
+import { parsePairingLink } from '@ai-todo/core';
 import { getLocale, type Locale, setLocale, t } from '@ai-todo/shared';
 import { router } from 'expo-router';
 import { type ReactNode, useState } from 'react';
@@ -87,7 +88,14 @@ export default function SettingsScreen() {
         </Txt>
         <TextInput
           value={url}
-          onChangeText={setUrl}
+          onChangeText={(text) => {
+            // A pasted pairing link fills in both fields.
+            const link = parsePairingLink(text);
+            if (link) {
+              setUrl(link.url);
+              setToken(link.code);
+            } else setUrl(text);
+          }}
           editable={!sync.config}
           placeholder="https://docket.example.com"
           placeholderTextColor={c.ink3}
@@ -100,17 +108,20 @@ export default function SettingsScreen() {
           value={token}
           onChangeText={setToken}
           editable={!sync.config}
-          placeholder={t('settings.sync.token')}
+          placeholder={t('settings.sync.tokenOrCode')}
           placeholderTextColor={c.ink3}
           autoCapitalize="none"
           autoCorrect={false}
-          secureTextEntry
+          secureTextEntry={token.startsWith('dk_')}
           style={[styles.input, { color: c.ink, borderColor: c.line, backgroundColor: c.surface }]}
         />
         <View style={styles.syncRow}>
           {sync.config ? (
             <>
               <Btn label={zh ? '立即同步' : 'Sync now'} onPress={syncNow} />
+              {sync.pair ? (
+                <Btn label={t('settings.sync.addDevice')} onPress={() => router.push('/devices')} />
+              ) : null}
               <Btn label={t('settings.sync.disconnect')} onPress={disconnectSync} />
             </>
           ) : (
@@ -122,7 +133,8 @@ export default function SettingsScreen() {
                 setBusy(true);
                 setError(null);
                 try {
-                  await connectSync(r, { url, token });
+                  const { name } = await connectSync(r, { url, token: token.trim() });
+                  if (name) setToken(useSync.getState().config?.token ?? '');
                 } catch (e) {
                   setError((e as Error).message);
                 } finally {
@@ -362,7 +374,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 16,
   },
-  syncRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  syncRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 },
   words: { height: undefined, minHeight: 72, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' },
   row: {
     flexDirection: 'row',

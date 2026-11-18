@@ -36,6 +36,11 @@ export class Db {
         created_at TEXT NOT NULL,
         last_seen TEXT
       );
+      CREATE TABLE IF NOT EXISTS pairings (
+        code_hash TEXT PRIMARY KEY,
+        expires_at INTEGER NOT NULL,
+        created_by TEXT
+      );
     `);
   }
 
@@ -120,6 +125,53 @@ export class Db {
     return this.db.prepare('DELETE FROM devices WHERE name = ?').run(name).changes > 0;
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // pairing: a short one-time code a new device trades for its own token
+
+  /** A new pairing code (`ABCD-EFGH`), usable once until it expires. */
+  createPairing(createdBy: string | null, ttlMs = PAIRING_TTL_MS): { code: string; expiresAt: number } {
+    const now = Date.now();
+    this.db.prepare('DELETE FROM pairings WHERE expires_at <= ?').run(now);
+    const bytes = randomBytes(8);
+    let raw = '';
+    for (const b of bytes) raw += PAIRING_ALPHABET[b % PAIRING_ALPHABET.length];
+    const code = `${raw.slice(0, 4)}-${raw.slice(4)}`;
+    const expiresAt = now + ttlMs;
+    this.db
+      .prepare('INSERT INTO pairings (code_hash, expires_at, created_by) VALUES (?, ?, ?)')
+      .run(hash(normalizePairingCode(code)), expiresAt, createdBy);
+    return { code, expiresAt };
+  }
+
+  /**
+   * Trades a pairing code for a token on a new device. The name is made unique (“iPhone 2”).
+   * Returns null when the code is unknown, used or expired.
+   */
+  redeemPairing(code: string, wantedName: string): { token: string; name: string } | null {
+    const key = hash(normalizePairingCode(code));
+    this.db.exec('BEGIN');
+    try {
+      const row = this.db.prepare('SELECT expires_at FROM pairings WHERE code_hash = ?').get(key) as
+        | { expires_at: number }
+        | undefined;
+      if (!row || Number(row.expires_at) <= Date.now()) {
+        this.db.exec('COMMIT');
+        return null;
+      }
+      this.db.prepare('DELETE FROM pairings WHERE code_hash = ?').run(key);
+      const taken = new Set(this.listDevices().map((d) => d.name));
+      const base = wantedName.trim().slice(0, 60) || 'Device';
+      let name = base;
+      for (let i = 2; taken.has(name); i++) name = `${base} ${i}`;
+      const token = this.createToken(name);
+      this.db.exec('COMMIT');
+      return { token, name };
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+
   /** Consistent copy of the database while the server keeps running. */
   backup(path: string): void {
     this.db.prepare('VACUUM INTO ?').run(path);
@@ -128,6 +180,14 @@ export class Db {
   close(): void {
     this.db.close();
   }
+}
+
+export const PAIRING_TTL_MS = 10 * 60 * 1000;
+/** No 0/O, 1/I/L, 5/S, 2/Z: easy to read off one screen and type on another. */
+const PAIRING_ALPHABET = 'ABCDEFGHJKMNPQRTUVWXY346789';
+
+export function normalizePairingCode(code: string): string {
+  return code.toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
 function hash(token: string): string {

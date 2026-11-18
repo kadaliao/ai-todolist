@@ -1,11 +1,18 @@
-import type { DayParts, Replica } from '@ai-todo/core';
+import type { DayParts, DeviceInfo, Replica } from '@ai-todo/core';
 import {
+  createPairing,
   DAY_PART_NAMES,
   DAY_PARTS_KEY,
   dayParts,
   deleteMemory,
+  listDevices,
   memories,
+  pairingLink,
+  parsePairingLink,
   parseQuickAdd,
+  qrMatrix,
+  qrPath,
+  removeDevice,
   setSetting,
   summarize,
 } from '@ai-todo/core';
@@ -23,6 +30,177 @@ import { useUI } from '../state/ui';
 import { type SpeechMode, setSpeechMode, setVoiceWords, speechMode, voiceWords } from '../state/voice';
 import { setTheme } from './theme';
 import { Button, cx, Dialog, Kbd, MOD } from './ui';
+
+/** “14:05” today, “11月3日” / “Nov 3” before. */
+function seenAt(iso: string): string {
+  const d = new Date(iso);
+  if (d.toDateString() === new Date().toDateString())
+    return d.toLocaleTimeString(getLocale() === 'zh' ? 'zh-CN' : 'en', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  return getLocale() === 'zh'
+    ? `${d.getMonth() + 1}月${d.getDate()}日`
+    : d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+}
+
+/** Settings → Sync → Add device: a one-time code (QR + link) and the device list. */
+function DevicesPanel({ url, token }: { url: string; token: string }) {
+  const [pairing, setPairing] = useState<{ code: string; expiresAt: number } | null>(null);
+  const [devices, setDevices] = useState<DeviceInfo[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
+
+  const renew = async () => {
+    setError(null);
+    try {
+      setPairing(await createPairing(url, token));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const refresh = async () => {
+    try {
+      setDevices(await listDevices(url, token));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per server
+  useEffect(() => {
+    void renew();
+    void refresh();
+    const id = setInterval(() => {
+      setNow(Date.now());
+      void refresh();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [url, token]);
+
+  const link = pairing ? pairingLink(url, pairing.code) : null;
+  const matrix = link ? qrMatrix(link) : null;
+  const expired = !!pairing && pairing.expiresAt <= now;
+  const minutes = pairing ? Math.max(1, Math.round((pairing.expiresAt - now) / 60_000)) : 0;
+
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-line p-4">
+      <p className="text-[12.5px] leading-relaxed text-ink-3">{t('pair.scan')}</p>
+      <div className="flex flex-wrap items-center gap-5">
+        <div className="grid size-[168px] shrink-0 place-items-center rounded-lg bg-white p-2">
+          {matrix && !expired ? (
+            <svg
+              viewBox={`-2 -2 ${matrix.length + 4} ${matrix.length + 4}`}
+              className="size-full"
+              role="img"
+              aria-label={t('pair.title')}
+              shapeRendering="crispEdges"
+            >
+              <path d={qrPath(matrix)} fill="#000" />
+            </svg>
+          ) : expired ? (
+            <span className="text-[12.5px] text-neutral-500">{t('pair.expired')}</span>
+          ) : (
+            <Loader2 className="size-5 animate-spin text-neutral-400" />
+          )}
+        </div>
+        <div className="flex min-w-0 flex-col gap-2">
+          <span className="text-[12px] text-ink-3">{t('pair.code')}</span>
+          <span className="select-all font-mono text-[26px] font-semibold tracking-[0.12em] text-ink">
+            {pairing?.code ?? '····-····'}
+          </span>
+          <span className={cx('text-[12px]', expired ? 'text-p1' : 'text-ink-3')}>
+            {pairing ? (expired ? t('pair.expired') : t('pair.expires', { min: minutes })) : ''}
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {link && !expired && (
+              <Button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(link);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  } catch {
+                    /* clipboard blocked */
+                  }
+                }}
+              >
+                {copied ? t('pair.copied') : t('pair.copy')}
+              </Button>
+            )}
+            <Button onClick={() => void renew()}>{t('pair.renew')}</Button>
+          </div>
+        </div>
+      </div>
+      {link && !expired && (
+        <code className="select-all break-all rounded-md bg-hover px-2 py-1.5 text-[11.5px] text-ink-3">
+          {link}
+        </code>
+      )}
+      {error && <p className="text-[12.5px] text-p1">{error}</p>}
+      <div className="flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-ink-2">{t('pair.devices')}</span>
+        {devices ? (
+          <ul className="divide-y divide-line">
+            {devices.map((d) => (
+              <li key={d.name} className="flex items-center gap-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13.5px] text-ink">{d.name}</div>
+                  <div className="text-[12px] text-ink-3">
+                    {d.current
+                      ? t('pair.thisDevice')
+                      : d.lastSeen
+                        ? t('pair.lastSeen', { when: seenAt(d.lastSeen) })
+                        : t('pair.never')}
+                  </div>
+                </div>
+                {!d.current &&
+                  (confirming === d.name ? (
+                    <span className="flex items-center gap-2 text-[12.5px]">
+                      <button
+                        type="button"
+                        className="font-medium text-p1 hover:underline"
+                        onClick={async () => {
+                          setConfirming(null);
+                          try {
+                            await removeDevice(url, token, d.name);
+                            await refresh();
+                          } catch (e) {
+                            setError((e as Error).message);
+                          }
+                        }}
+                      >
+                        {t('pair.remove')}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-ink-3 hover:underline"
+                        onClick={() => setConfirming(null)}
+                      >
+                        {t('cancel')}
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-[12.5px] text-p1 hover:underline"
+                      title={t('pair.removeConfirm', { name: d.name })}
+                      onClick={() => setConfirming(d.name)}
+                    >
+                      {t('pair.remove')}
+                    </button>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Loader2 className="size-4 animate-spin text-ink-3" />
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function Toasts() {
   const toasts = useUI((s) => s.toasts);
@@ -147,7 +325,8 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
   const theme = useUI((s) => s.theme);
   const r = useReplica();
   const sync = useSyncStatus();
-  const { config, ai } = useSyncStore();
+  const { config, ai, pair } = useSyncStore();
+  const [devicesOpen, setDevicesOpen] = useState(false);
   const [url, setUrl] = useState(config?.url ?? '');
   const [token, setToken] = useState(config?.token ?? '');
   const [busy, setBusy] = useState(false);
@@ -205,7 +384,14 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
           <div className="flex flex-col gap-2">
             <input
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                // A pasted pairing link fills in both fields.
+                const link = parsePairingLink(e.target.value);
+                if (link) {
+                  setUrl(link.url);
+                  setToken(link.code);
+                } else setUrl(e.target.value);
+              }}
               placeholder="https://docket.example.com"
               aria-label={t('settings.sync.server')}
               disabled={!!config}
@@ -214,22 +400,32 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
             <input
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder={t('settings.sync.token')}
-              aria-label={t('settings.sync.token')}
-              type="password"
+              placeholder={t('settings.sync.tokenOrCode')}
+              aria-label={t('settings.sync.tokenOrCode')}
+              type={token.startsWith('dk_') ? 'password' : 'text'}
+              autoComplete="off"
+              spellCheck={false}
               disabled={!!config}
               className={inputClass}
             />
           </div>
           <div className="flex items-center gap-3">
             {config ? (
-              <Button
-                onClick={async () => {
-                  await disconnectSync();
-                }}
-              >
-                {t('settings.sync.disconnect')}
-              </Button>
+              <>
+                {pair && (
+                  <Button onClick={() => setDevicesOpen((o) => !o)} aria-expanded={devicesOpen}>
+                    {t('settings.sync.addDevice')}
+                  </Button>
+                )}
+                <Button
+                  onClick={async () => {
+                    setDevicesOpen(false);
+                    await disconnectSync();
+                  }}
+                >
+                  {t('settings.sync.disconnect')}
+                </Button>
+              </>
             ) : (
               <Button
                 variant="primary"
@@ -238,7 +434,8 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
                   setBusy(true);
                   setError(null);
                   try {
-                    await connectSync(r, { url, token });
+                    await connectSync(r, { url, token: token.trim() });
+                    setToken(useSyncStore.getState().config?.token ?? '');
                   } catch (e) {
                     setError((e as Error).message);
                   } finally {
@@ -263,6 +460,7 @@ export function SettingsDialog({ onLocale }: { onLocale: (l: Locale) => void }) 
               {error ?? sync.label}
             </span>
           </div>
+          {config && devicesOpen && <DevicesPanel url={config.url} token={config.token} />}
         </Section>
 
         <RemindersSection />

@@ -183,6 +183,8 @@ export default function RootLayout() {
           <Stack.Screen name="settings" options={{ presentation: 'modal', headerShown: false }} />
           <Stack.Screen name="voice-log" options={{ presentation: 'modal', headerShown: false }} />
           <Stack.Screen name="memory" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="devices" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="pair" options={{ presentation: 'modal', headerShown: false }} />
           <Stack.Screen name="search" options={{ headerShown: false, animation: 'fade' }} />
         </Stack>
         <Toasts />

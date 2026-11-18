@@ -1,6 +1,15 @@
-import { checkServer, normalizeServerUrl, type Replica, SyncClient, type SyncState } from '@ai-todo/core';
+import {
+  checkServer,
+  isPairingCode,
+  normalizeServerUrl,
+  type Replica,
+  redeemPairing,
+  SyncClient,
+  type SyncState,
+} from '@ai-todo/core';
 import { getLocale, t } from '@ai-todo/shared';
 import { create } from 'zustand';
+import { isTauri } from '../platform';
 import { getSetting, isPristine, resetForSync, setSetting } from './replica';
 
 /** Web/desktop wrapper around the shared sync client: settings in IndexedDB, status in a store. */
@@ -15,6 +24,8 @@ interface SyncStore {
   message: string;
   config: SyncConfig | null;
   ai: { available: boolean; model?: string; agent?: boolean; speech?: boolean; stream?: boolean } | null;
+  /** The server hands out pairing codes and lists devices. */
+  pair: boolean;
   lastSync: number | null;
 }
 
@@ -23,6 +34,7 @@ export const useSyncStore = create<SyncStore>(() => ({
   message: '',
   config: null,
   ai: null,
+  pair: false,
   lastSync: null,
 }));
 
@@ -59,7 +71,7 @@ function startClient(replica: Replica, config: SyncConfig): Promise<void> {
     storage: { get: getSetting, set: setSetting },
     onStatus: (s) => useSyncStore.setState({ state: s.state, message: s.message, lastSync: s.lastSync }),
     onHealth: (h) => {
-      useSyncStore.setState({ ai: h.ai ?? null });
+      useSyncStore.setState({ ai: h.ai ?? null, pair: !!h.pair });
       try {
         localStorage.setItem('docket.serverAi', JSON.stringify(h.ai ? { ...h.ai, url: config.url } : null));
       } catch {
@@ -86,9 +98,39 @@ export async function initSync(replica: Replica): Promise<void> {
   if (config) void startClient(replica, config);
 }
 
-/** Verify a server + token, then save and start syncing. Throws with a readable message. */
+/** What this device calls itself on the server's device list. */
+function deviceName(): string {
+  if (isTauri) return 'Mac';
+  const ua = navigator.userAgent;
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /Chrome\//.test(ua)
+      ? 'Chrome'
+      : /Firefox\//.test(ua)
+        ? 'Firefox'
+        : /Safari\//.test(ua)
+          ? 'Safari'
+          : '';
+  return browser ? `Web · ${browser}` : 'Web';
+}
+
+/**
+ * Verify a server + token (or trade a pairing code for one), then save and start syncing.
+ * Throws with a readable message.
+ */
 export async function connectSync(replica: Replica, config: SyncConfig): Promise<void> {
   const url = normalizeServerUrl(config.url);
+  if (isPairingCode(config.token)) {
+    try {
+      config = { url, token: (await redeemPairing(url, config.token, deviceName())).token };
+    } catch (e) {
+      const code = (e as Error).message;
+      if (code === 'invalid-code') throw new Error(t('settings.sync.invalidCode'));
+      if (code === 'unsupported') throw new Error(t('settings.sync.noPairing'));
+      if (code === 'unreachable') throw new Error(t('settings.sync.status.offline'));
+      throw e;
+    }
+  }
   let cursor: number;
   try {
     ({ cursor } = await checkServer(url, config.token));
@@ -113,6 +155,6 @@ export async function connectSync(replica: Replica, config: SyncConfig): Promise
 export async function disconnectSync(): Promise<void> {
   client?.stop();
   client = null;
-  useSyncStore.setState({ state: 'off', config: null, ai: null });
+  useSyncStore.setState({ state: 'off', config: null, ai: null, pair: false });
   await setSetting('sync.config', null);
 }

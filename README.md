@@ -33,10 +33,10 @@ apps/server       同步服务 + AI 接口 + MCP，同时托管网页
 ```sh
 cp .env.example .env          # 填 AI 模型地址和 key（不填则关闭 AI 和语音助手）；云端语音识别可选
 docker compose up -d
-docker compose exec docket node dist/cli.js token create laptop   # 每台设备一个令牌
+docker compose logs docket | grep pairing   # 第一台设备的配对码
 ```
 
-浏览器打开服务器地址即可使用网页版；在 设置 → 同步 填入地址和令牌。HTTPS 反代与升级见 [docs/deploy.md](docs/deploy.md)。
+浏览器打开服务器地址即可使用网页版；在 设置 → 同步 填入地址和配对码。之后的设备在已连上的设备上点“添加设备”扫码或粘贴配对链接。HTTPS 反代与升级见 [docs/deploy.md](docs/deploy.md)。
 
 **桌面版**：`pnpm --filter @ai-todo/desktop build` 生成 `Docket.app` 和 DMG。设置 `APPLE_SIGNING_IDENTITY`（Developer ID）会签名，再设置 `DOCKET_NOTARY_PROFILE`（`xcrun notarytool store-credentials` 存好的钥匙串配置名）会公证并装订，别人下载后可直接打开。⌘⇧Space（Windows 为 Ctrl+Shift+Space）随时唤出快速录入；关闭窗口后常驻菜单栏，提醒照常。
 

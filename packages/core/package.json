@@ -15,6 +15,7 @@
   "dependencies": {
     "chrono-node": "^2.10.3",
     "fractional-indexing-jittered": "^1.1.0",
+    "qrcode-generator": "2.0.4",
     "rrule-temporal": "^2.2.8",
     "zod": "^4.6.7"
   },

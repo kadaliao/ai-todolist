@@ -24,18 +24,22 @@ docket.example.com {
 
 WebSocket（`/api/sync/ws`）和流式响应（AI 的 NDJSON）Caddy 默认就能正确转发，不需要额外配置。走 443 即可，不必开新端口。
 
-## 3. 设备令牌
+## 3. 连上设备
 
-每台设备一个令牌，丢了就吊销那一个：
+每台设备有自己的令牌，丢了就移除那一台。不用手抄令牌，用配对码：
+
+- **第一台设备**：服务器第一次启动、还没有设备时，日志里会打出一个配对码（一小时内有效）：`docker compose logs docket | grep pairing`。在 Docket → 设置 → 同步 里填服务器地址和这个配对码。
+- **之后的设备**：在已连上的设备上点 设置 → 同步 → 添加设备，会显示二维码、配对码和配对链接（10 分钟内有效，只能用一次）。新手机用相机扫码就会打开 Docket 连上；Mac 和网页把配对链接粘进服务器地址栏，或者填地址和配对码。同一个页面里能看到各台设备最后在线的时间，也能移除。
+- 命令行也能拿配对码，或者直接建令牌（MCP 等不走配对的客户端要用令牌）：
 
 ```sh
-docker compose exec docket node dist/cli.js token create macbook
-docker compose exec docket node dist/cli.js token create iphone
+docker compose exec docket node dist/cli.js pair
+docker compose exec docket node dist/cli.js token create claude
 docker compose exec docket node dist/cli.js token list
 docker compose exec docket node dist/cli.js token revoke iphone
 ```
 
-令牌只显示一次；服务器只存它的 SHA-256。第一台设备连上后，后连的“全新”设备（只有示例任务）会直接采用账户里的数据，不会混入示例。
+令牌只显示一次；服务器只存令牌和配对码的 SHA-256。配对接口每分钟最多错 30 次。第一台设备连上后，后连的“全新”设备（只有示例任务）会直接采用账户里的数据，不会混入示例。
 
 ## 4. AI
 
