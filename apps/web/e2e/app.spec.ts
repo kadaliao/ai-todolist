@@ -93,5 +93,8 @@ test('“之前” sets a deadline, shown on the row and in the detail pane', as
   const r = page.locator('[data-task-row]').filter({ hasText: '提交报销' });
   await expect(r).toContainText('截止');
   await r.click();
-  await expect(page.getByText('截止日期')).toBeVisible();
+  // The detail pane's deadline field; a 截止日期 button can be on screen too.
+  await expect(
+    page.getByRole('complementary', { name: '打开详情' }).getByText('截止日期').first(),
+  ).toBeVisible();
 });

@@ -1,10 +1,11 @@
-import { parseQuickAdd } from '@ai-todo/core';
-import { describeRecurrence, formatScheduled, getLocale, t } from '@ai-todo/shared';
-import { router } from 'expo-router';
+import { parseQuickAdd, splitSentences } from '@ai-todo/core';
+import { describeRecurrence, formatDeadline, formatScheduled, t } from '@ai-todo/shared';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Sparkles, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,9 +17,11 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Txt } from '../components/ui';
+import { LevelBars, MicButton, useHold } from '../components/Voice';
 import { addTasks, getReplica, parseContext, toast, undo } from '../state/actions';
 import { draftToTask, type ExtractedTask, extractTasks } from '../state/ai';
 import { useToday } from '../state/replica';
+import { cancelListening, clearVoiceError, listen, takeCapture, useVoice } from '../state/voice';
 import { useColors } from '../theme';
 
 interface Draft {
@@ -27,19 +30,56 @@ interface Draft {
   data: ExtractedTask;
 }
 
+/** A pause this long ends hands-free dictation: longer than the assistant's, lists need thinking. */
+const DUMP_SILENCE_MS = 3500;
+
+/** Each new utterance starts a new line, so the plain split keeps them apart. */
+const append = (base: string, said: string) => (base.trim() ? `${base.replace(/\s+$/, '')}\n${said}` : said);
+
 /** Say or paste anything; the AI drafts tasks (dashed), you keep what's right. */
 export default function DumpScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const today = useToday();
+  const params = useLocalSearchParams<{ listen?: string }>();
   const [text, setText] = useState('');
+  const voice = useVoice();
+  const hold = useHold();
+  const listening = voice.status !== 'idle';
+  // What was in the box when listening started; the live words show after it.
+  const base = useRef('');
+  const textRef = useRef(text);
+  textRef.current = text;
+  const wasListening = useRef(false);
+  if (listening && !wasListening.current) base.current = textRef.current;
+  wasListening.current = listening;
+  const shown = listening && voice.text ? append(base.current, voice.text) : text;
+  const heard = (said: string) => setText(append(base.current, said));
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abort = useRef<(() => void) | null>(null);
   const seq = useRef(0);
-  const zh = getLocale() === 'zh';
-  useEffect(() => () => abort.current?.(), []);
+  useEffect(
+    () => () => {
+      abort.current?.();
+      if (useVoice.getState().status !== 'idle') cancelListening();
+      clearVoiceError();
+    },
+    [],
+  );
+  useEffect(() => {
+    if (listening) Keyboard.dismiss();
+  }, [listening]);
+  // Opened from the browse page's mic: start listening right away.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, on open
+  useEffect(() => {
+    if (params.listen !== '1') return;
+    void listen({ handsFree: true, silenceMs: DUMP_SILENCE_MS }).then((said) => {
+      takeCapture();
+      if (said) heard(said);
+    });
+  }, []);
 
   const extract = () => {
     setBusy(true);
@@ -60,10 +100,7 @@ export default function DumpScreen() {
   };
 
   const splitLocally = () => {
-    const parts = text
-      .split(/[\n。；;！!？?]+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 1);
+    const parts = splitSentences(text);
     setDrafts(
       parts.map((p) => {
         const parsed = parseQuickAdd(p, parseContext());
@@ -108,17 +145,42 @@ export default function DumpScreen() {
       {drafts === null ? (
         <View style={{ flex: 1, padding: 20, gap: 12 }}>
           <TextInput
-            autoFocus
+            autoFocus={params.listen !== '1'}
             multiline
-            value={text}
+            editable={!listening}
+            value={shown}
             onChangeText={setText}
             placeholder={t('ai.dump.placeholder')}
             placeholderTextColor={c.ink3}
             style={[styles.text, { color: c.ink, backgroundColor: c.surface, borderColor: c.line }]}
           />
-          <Txt variant="meta" style={{ paddingHorizontal: 4 }}>
-            {zh ? '可以用键盘上的麦克风直接口述。' : 'Tip: use the keyboard’s microphone to dictate.'}
-          </Txt>
+          <View style={styles.voiceRow}>
+            <MicButton size={48} silenceMs={DUMP_SILENCE_MS} onText={heard} style={{ margin: -8 }} />
+            <View style={{ flex: 1, gap: 4 }}>
+              {listening ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <LevelBars color={hold.cancel ? c.danger : c.jade} height={18} />
+                  <Txt variant="meta" tone={hold.cancel ? c.danger : c.jade} style={{ fontWeight: '600' }}>
+                    {voice.status === 'transcribing' ? t('ai.dump.finishing') : t('ai.dump.listening')}
+                  </Txt>
+                </View>
+              ) : null}
+              <Txt variant="meta">
+                {hold.holding
+                  ? hold.cancel
+                    ? t('agent.releaseCancel')
+                    : t('agent.release')
+                  : listening
+                    ? t('ai.dump.tapToStop')
+                    : t('ai.dump.voiceHint')}
+              </Txt>
+              {voice.error && !listening ? (
+                <Txt variant="meta" tone={c.p1}>
+                  {voice.error}
+                </Txt>
+              ) : null}
+            </View>
+          </View>
           {error ? (
             <Txt variant="meta" tone={c.p1} style={{ paddingHorizontal: 4 }}>
               {t('ai.unavailable', { message: error })}
@@ -127,17 +189,20 @@ export default function DumpScreen() {
           <View style={[styles.actions, { paddingBottom: insets.bottom + 8 }]}>
             <Pressable
               onPress={splitLocally}
-              disabled={!text.trim()}
-              style={[styles.secondary, { opacity: text.trim() ? 1 : 0.4 }]}
+              disabled={!text.trim() || listening}
+              style={[styles.secondary, { opacity: text.trim() && !listening ? 1 : 0.4 }]}
             >
               <Txt tone={c.ink2} style={{ fontSize: 15 }}>
-                {zh ? '不用 AI，按句拆分' : 'Split by sentence'}
+                {t('ai.dump.split')}
               </Txt>
             </Pressable>
             <Pressable
               onPress={extract}
-              disabled={!text.trim()}
-              style={[styles.primary, { backgroundColor: c.jade, opacity: text.trim() ? 1 : 0.4 }]}
+              disabled={!text.trim() || listening}
+              style={[
+                styles.primary,
+                { backgroundColor: c.jade, opacity: text.trim() && !listening ? 1 : 0.4 },
+              ]}
             >
               <Sparkles size={17} color={c.jadeInk} />
               <Txt style={{ color: c.jadeInk, fontWeight: '600' }}>{t('ai.dump.extract')}</Txt>
@@ -173,6 +238,11 @@ export default function DumpScreen() {
                         {input.recurrence
                           ? ` · ${describeRecurrence({ rule: input.recurrence.rule, from: input.recurrence.from ?? 'scheduled' })}`
                           : ''}
+                      </Txt>
+                    ) : null}
+                    {input.deadline ? (
+                      <Txt variant="meta" tone={c.jade} style={{ marginTop: 2, fontWeight: '500' }}>
+                        {formatDeadline(input.deadline, today)}
                       </Txt>
                     ) : null}
                     {d.data.project ? (
@@ -235,6 +305,7 @@ const styles = StyleSheet.create({
     lineHeight: 25,
     textAlignVertical: 'top',
   },
+  voiceRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 4 },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   primary: {
     flexDirection: 'row',

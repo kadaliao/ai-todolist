@@ -79,6 +79,8 @@ export interface ListenOptions {
   /** Hands-free: stop by itself after a pause. Push-to-talk: stop when released. Read live, so a
    * quick tap can turn push-to-talk into hands-free after it started. */
   handsFree: () => boolean;
+  /** Hands-free: how long a pause ends listening (default 1.4 s). */
+  silenceMs?: number;
   /** Project and label names, to help cloud recognition. */
   hints: string[];
   onPartial(text: string): void;
@@ -345,7 +347,7 @@ export async function listen(opts: ListenOptions): Promise<Listening> {
     window.setInterval(() => {
       const now = Date.now();
       if (now - started > MAX_MS) stop();
-      else if (opts.handsFree() && spoke && now - lastActivity > SILENCE_MS) stop();
+      else if (opts.handsFree() && spoke && now - lastActivity > (opts.silenceMs ?? SILENCE_MS)) stop();
       else if (opts.handsFree() && !spoke && meterOk && now - started > NOTHING_MS) stop();
       else if (opts.handsFree() && !spoke && !meterOk && now - started > NOTHING_MS * 2) stop();
     }, 200),

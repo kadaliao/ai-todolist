@@ -12,6 +12,7 @@ export {
   type QuickAddTokenKind,
   toNewTask,
 } from './parser';
+export { splitSentences } from './parser/split';
 export {
   formatRule,
   nextOccurrence,

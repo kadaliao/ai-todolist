@@ -96,6 +96,12 @@ const SILENCE_MS = 1600;
 /** A hands-free session that hears nothing gives up after this long. */
 const NOTHING_MS = 7000;
 
+export interface ListenOptions {
+  handsFree: boolean;
+  /** Hands-free: how long a pause ends the session (default 1.6 s; longer for dictating a list). */
+  silenceMs?: number;
+}
+
 interface Session {
   committed: string;
   partial: string;
@@ -110,6 +116,8 @@ interface Session {
   startedAt: number;
   releasedAt: number | null;
   handsFree: boolean;
+  /** Hands-free: how long a pause ends the session. */
+  silenceMs: number;
   /** Streaming to the server instead of running the platform recognizer. */
   stream: StreamLink | null;
 }
@@ -205,7 +213,7 @@ function wire(): void {
       s.partial = '';
     } else s.partial = text;
     useVoice.setState({ text: current(s) });
-    if (text) armSilence(s, SILENCE_MS);
+    if (text) armSilence(s, s.silenceMs);
   });
   ExpoSpeechRecognitionModule.addListener('volumechange', (e: { value: number }) => {
     voiceLevel.value = withTiming(Math.max(0, Math.min(1, (e.value + 2) / 12)), { duration: 90 });
@@ -335,7 +343,7 @@ async function startStream(s: Session): Promise<void> {
     if (msg.type === 'text' && typeof msg.text === 'string') {
       s.partial = msg.text.trim();
       if (session === s) useVoice.setState({ text: current(s) });
-      if (s.partial && useVoice.getState().handsFree) armSilence(s, SILENCE_MS);
+      if (s.partial && useVoice.getState().handsFree) armSilence(s, s.silenceMs);
     } else if (msg.type === 'final') {
       settle((msg.text ?? '').trim());
     } else if (msg.type === 'error') fail(msg.error ?? 'error');
@@ -489,7 +497,7 @@ async function transcribeFile(uri: string, fallback: string): Promise<string | n
  * Start listening. Resolves with what was said once the session ends (finger lifted, silence in
  * hands-free mode, or {@link stopListening}); `null` when cancelled or nothing was heard.
  */
-export async function listen(opts: { handsFree: boolean }): Promise<string | null> {
+export async function listen(opts: ListenOptions): Promise<string | null> {
   if (session) {
     // Let the previous session's `end` arrive first, so it can't end this one.
     cancelListening();
@@ -538,6 +546,7 @@ export async function listen(opts: { handsFree: boolean }): Promise<string | nul
       startedAt: Date.now(),
       releasedAt: null,
       handsFree: opts.handsFree,
+      silenceMs: opts.silenceMs ?? SILENCE_MS,
       stream: null,
     };
     session = s;
@@ -565,10 +574,7 @@ export async function listen(opts: { handsFree: boolean }): Promise<string | nul
   });
 }
 
-async function listenStreaming(
-  opts: { handsFree: boolean },
-  fail: (message: string) => null,
-): Promise<string | null> {
+async function listenStreaming(opts: ListenOptions, fail: (message: string) => null): Promise<string | null> {
   const perm = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
   if (!perm.granted) return fail(t('agent.micDenied'));
   if (useVoice.getState().status !== 'starting') return null;
@@ -587,6 +593,7 @@ async function listenStreaming(
       startedAt: Date.now(),
       releasedAt: null,
       handsFree: opts.handsFree,
+      silenceMs: opts.silenceMs ?? SILENCE_MS,
       stream: null,
     };
     session = s;
@@ -615,7 +622,7 @@ export function goHandsFree(): void {
   useVoice.setState({ handsFree: true });
   if (session) {
     session.handsFree = true;
-    armSilence(session, current(session) ? SILENCE_MS : NOTHING_MS);
+    armSilence(session, current(session) ? session.silenceMs : NOTHING_MS);
   }
 }
 

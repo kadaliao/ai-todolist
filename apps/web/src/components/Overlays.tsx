@@ -14,20 +14,37 @@ import {
   qrPath,
   removeDevice,
   setSetting,
+  splitSentences,
   summarize,
 } from '@ai-todo/core';
-import { describeRecurrence, formatScheduled, getLocale, type Locale, t } from '@ai-todo/shared';
+import {
+  describeRecurrence,
+  formatDeadline,
+  formatScheduled,
+  getLocale,
+  type Locale,
+  t,
+} from '@ai-todo/shared';
 import { Download, Loader2, Mic, Sparkles, Upload, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { addTasks, parseContext, run } from '../state/actions';
-import { AiError, draftToTask, type ExtractedTask, extractTasks, transcribe } from '../state/ai';
+import { AiError, draftToTask, type ExtractedTask, extractTasks } from '../state/ai';
+import { vocabulary } from '../state/assistant';
 import { clearJournal, exportJournal, getJournal, setJournalEnabled, useJournal } from '../state/journal';
 import { requestNotificationPermission, setReminderSettings, useReminderSettings } from '../state/reminders';
 import { useQuery, useReplica, useToday } from '../state/replica';
 import { connectSync, disconnectSync, useSyncStatus, useSyncStore } from '../state/sync';
 import { useUI } from '../state/ui';
-import { type SpeechMode, setSpeechMode, setVoiceWords, speechMode, voiceWords } from '../state/voice';
+import {
+  type Listening,
+  listen,
+  type SpeechMode,
+  setSpeechMode,
+  setVoiceWords,
+  speechMode,
+  voiceWords,
+} from '../state/voice';
 import { setTheme } from './theme';
 import { Button, cx, Dialog, Kbd, MOD } from './ui';
 
@@ -815,19 +832,14 @@ interface Draft {
   data: ExtractedTask;
 }
 
-type SpeechRec = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: (e: {
-    results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }>;
-    resultIndex: number;
-  }) => void;
-  onend: () => void;
-  onerror: () => void;
-  start(): void;
-  stop(): void;
-};
+/** A pause this long ends hands-free dictation: longer than the assistant's, lists need thinking. */
+const DUMP_SILENCE_MS = 3500;
+/** Under this, a press on the mic counts as a tap: keep listening until a pause. */
+const DUMP_TAP_MS = 350;
+
+/** Each new utterance starts a new line, so the plain split keeps them apart. */
+const appendSaid = (base: string, said: string) =>
+  base.trim() ? `${base.replace(/\s+$/, '')}\n${said}` : said;
 
 export function BrainDump() {
   const open = useUI((s) => s.brainDumpOpen);
@@ -837,9 +849,16 @@ export function BrainDump() {
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [listening, setListening] = useState(false);
+  // Dictation: held down, hands-free after a tap, or finishing (cloud text on its way).
+  const [voice, setVoice] = useState<'off' | 'hold' | 'free' | 'finishing'>('off');
+  const [partial, setPartial] = useState('');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const session = useRef<Listening | null>(null);
+  const handsFree = useRef(false);
+  const pendingStop = useRef<'stop' | 'cancel' | null>(null);
+  const pressedAt = useRef(0);
+  const base = useRef('');
   const abort = useRef<AbortController | null>(null);
-  const rec = useRef<SpeechRec | MediaRecorder | null>(null);
   const seq = useRef(0);
 
   useEffect(() => {
@@ -851,6 +870,9 @@ export function BrainDump() {
       }
     } else {
       abort.current?.abort();
+      if (session.current) session.current.cancel();
+      else pendingStop.current = 'cancel';
+      setVoiceError(null);
       setDrafts(null);
       setError(null);
       setBusy(false);
@@ -882,10 +904,7 @@ export function BrainDump() {
 
   /** Without AI: one task per sentence/line, dates read by the local parser. */
   const splitLocally = () => {
-    const parts = text
-      .split(/[\n。；;！!？?]+|，(?=\s*(?:还有|然后|另外|再|并且))/)
-      .map((s) => s.replace(/^\s*(?:还有|然后|另外|再|并且|and|also)\s*/i, '').trim())
-      .filter((s) => s.length > 1);
+    const parts = splitSentences(text);
     setDrafts(
       parts.map((p) => {
         const parsed = parseQuickAdd(p, parseContext());
@@ -925,55 +944,58 @@ export function BrainDump() {
   };
 
   const startVoice = async () => {
-    const W = window as unknown as {
-      SpeechRecognition?: new () => SpeechRec;
-      webkitSpeechRecognition?: new () => SpeechRec;
-    };
-    const Ctor = W.SpeechRecognition ?? W.webkitSpeechRecognition;
-    if (Ctor) {
-      const sr = new Ctor();
-      sr.lang = getLocale() === 'zh' ? 'zh-CN' : 'en-US';
-      sr.continuous = true;
-      sr.interimResults = false;
-      const base = text;
-      let acc = '';
-      sr.onresult = (e) => {
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const res = e.results[i];
-          if (res?.isFinal) acc += res[0]?.transcript ?? '';
-        }
-        setText(base ? `${base} ${acc}` : acc);
-      };
-      sr.onend = () => setListening(false);
-      sr.onerror = () => setListening(false);
-      sr.start();
-      rec.current = sr;
-      setListening(true);
-      return;
-    }
+    if (session.current || voice !== 'off') return;
+    base.current = text;
+    handsFree.current = false;
+    pendingStop.current = null;
+    setPartial('');
+    setVoiceError(null);
+    setVoice('hold');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
-      const chunks: Blob[] = [];
-      mr.ondataavailable = (e) => chunks.push(e.data);
-      mr.onstop = async () => {
-        for (const tr of stream.getTracks()) tr.stop();
-        setListening(false);
-        try {
-          const said = await transcribe(new Blob(chunks, { type: mr.mimeType }));
-          setText((x) => (x ? `${x} ${said}` : said));
-        } catch (e) {
-          setError((e as Error).message);
-        }
-      };
-      mr.start();
-      rec.current = mr;
-      setListening(true);
+      const s = await listen({
+        handsFree: () => handsFree.current,
+        silenceMs: DUMP_SILENCE_MS,
+        hints: vocabulary(),
+        onPartial: setPartial,
+        onTranscribing: () => setVoice('finishing'),
+        onEnd: (res) => {
+          session.current = null;
+          setVoice('off');
+          setPartial('');
+          if ('error' in res) setVoiceError(res.error);
+          else if (res.text.trim()) setText(appendSaid(base.current, res.text.trim()));
+        },
+      });
+      session.current = s;
+      // Let go (or closed) before the microphone was ready.
+      if (pendingStop.current === 'cancel') s.cancel();
+      else if (pendingStop.current === 'stop') s.stop();
     } catch (e) {
-      setError((e as Error).message);
+      setVoice('off');
+      setVoiceError((e as Error).message);
     }
   };
-  const stopVoice = () => rec.current?.stop();
+  const stopVoice = () => {
+    if (session.current) session.current.stop();
+    else pendingStop.current = 'stop';
+  };
+  const micDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    if (voice === 'free') stopVoice();
+    else if (voice === 'off') {
+      pressedAt.current = Date.now();
+      void startVoice();
+    }
+  };
+  const micUp = () => {
+    if (voice !== 'hold') return;
+    if (Date.now() - pressedAt.current < DUMP_TAP_MS) {
+      handsFree.current = true;
+      setVoice('free');
+    } else stopVoice();
+  };
+  const listening = voice !== 'off';
 
   const included = drafts?.filter((d) => d.include).length ?? 0;
 
@@ -989,7 +1011,8 @@ export function BrainDump() {
           <>
             <textarea
               autoFocus
-              value={text}
+              value={listening && partial ? appendSaid(base.current, partial) : text}
+              readOnly={listening}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim()) {
@@ -1001,23 +1024,44 @@ export function BrainDump() {
               className="min-h-[160px] w-full resize-none rounded-[10px] border border-line bg-bg p-3 text-[14px] leading-relaxed outline-none placeholder:text-ink-3 focus:border-jade-line"
             />
             {error && <p className="text-[12.5px] text-p1">{t('ai.unavailable', { message: error })}</p>}
+            <p className={cx('text-[12.5px]', voiceError ? 'text-p1' : 'text-ink-3')}>
+              {voiceError ??
+                (voice === 'free'
+                  ? t('ai.dump.tapToStop')
+                  : voice === 'hold'
+                    ? t('agent.release')
+                    : t('ai.dump.voiceHint'))}
+            </p>
             <div className="flex items-center gap-2">
               <Button
                 variant={listening ? 'danger' : 'subtle'}
-                onPointerDown={() => void startVoice()}
-                onPointerUp={stopVoice}
-                onPointerLeave={() => listening && stopVoice()}
+                onPointerDown={micDown}
+                onPointerUp={micUp}
+                onPointerLeave={() =>
+                  voice === 'hold' && Date.now() - pressedAt.current >= DUMP_TAP_MS && stopVoice()
+                }
+                disabled={voice === 'finishing'}
               >
-                <Mic className={cx('size-3.5', listening && 'animate-pulse')} />
-                {listening ? t('ai.dump.listening') : t('ai.dump.voice')}
+                {voice === 'finishing' ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Mic className={cx('size-3.5', listening && 'animate-pulse')} />
+                )}
+                {voice === 'finishing'
+                  ? t('ai.dump.finishing')
+                  : voice === 'free'
+                    ? t('ai.dump.stop')
+                    : listening
+                      ? t('ai.dump.listening')
+                      : t('ai.dump.voice')}
               </Button>
-              <Button variant="ghost" disabled={!text.trim()} onClick={splitLocally}>
-                {getLocale() === 'zh' ? '不用 AI，按句拆分' : 'Split by sentence (no AI)'}
+              <Button variant="ghost" disabled={!text.trim() || listening} onClick={splitLocally}>
+                {t('ai.dump.split')}
               </Button>
               <Button
                 variant="primary"
                 className="ml-auto"
-                disabled={!text.trim() || busy}
+                disabled={!text.trim() || busy || listening}
                 onClick={() => void extract()}
               >
                 <Sparkles className="size-3.5" />
@@ -1128,7 +1172,11 @@ function DraftCard({
               {formatScheduled(input.scheduled, today)}
               {input.recurrence ? ` · ${describeRecurrence(input.recurrence as never)}` : ''}
             </span>
-          ) : draft.data.when ? (
+          ) : null}
+          {input.deadline ? (
+            <span className="font-medium text-jade">{formatDeadline(input.deadline, today)}</span>
+          ) : null}
+          {!input.scheduled && !input.deadline && draft.data.when ? (
             <span title={draft.data.when}>“{draft.data.when}”</span>
           ) : null}
           {project && <span>#{project.name}</span>}

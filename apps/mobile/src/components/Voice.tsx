@@ -43,6 +43,15 @@ export function talkHandsFree(): void {
   void listen({ handsFree: true }).then((text) => text && speak(text, takeCapture()));
 }
 
+/** Hand what was heard to `onText`, or to the assistant. */
+function deliver(text: string | null, onText?: (text: string) => void): void {
+  if (!text) return;
+  if (onText) {
+    takeCapture();
+    onText(text);
+  } else speak(text, takeCapture());
+}
+
 /**
  * The mic. Press and hold to talk (release sends, slide up cancels); a short tap starts
  * hands-free listening that ends after a pause, and a tap while listening stops it.
@@ -51,6 +60,8 @@ export function MicButton({
   size = 60,
   onTap,
   onSent,
+  onText,
+  silenceMs,
   style,
 }: {
   size?: number;
@@ -58,14 +69,18 @@ export function MicButton({
   onTap?: () => void;
   /** After push-to-talk was released to send. */
   onSent?: () => void;
+  /** Where the words go; the assistant by default. */
+  onText?: (text: string) => void;
+  /** Hands-free: how long a pause ends listening. */
+  silenceMs?: number;
   style?: ViewStyle;
 }) {
   const c = useColors();
   const status = useVoice((s) => s.status);
   const handsFree = useVoice((s) => s.handsFree);
   const pressed = useSharedValue(0);
-  const latest = useRef({ onTap, onSent });
-  latest.current = { onTap, onSent };
+  const latest = useRef({ onTap, onSent, onText, silenceMs });
+  latest.current = { onTap, onSent, onText, silenceMs };
   const press = useRef({
     timer: null as ReturnType<typeof setTimeout> | null,
     holding: false,
@@ -112,7 +127,9 @@ export function MicButton({
         pressed.value = withSpring(1, { damping: 16, stiffness: 300 });
         if (p.toggling) return;
         // Start right away so the first words aren't lost; a tap turns it into hands-free.
-        void listen({ handsFree: false }).then((text) => text && speak(text, takeCapture()));
+        void listen({ handsFree: false, silenceMs: latest.current.silenceMs }).then((text) =>
+          deliver(text, latest.current.onText),
+        );
         p.timer = setTimeout(() => {
           p.holding = true;
           p.timer = null;
@@ -154,7 +171,9 @@ export function MicButton({
         if (e.nativeEvent.actionName !== 'activate') return;
         if (active) stopListening();
         else {
-          talkHandsFree();
+          void listen({ handsFree: true, silenceMs: latest.current.silenceMs }).then((text) =>
+            deliver(text, latest.current.onText),
+          );
           latest.current.onTap?.();
         }
       }}

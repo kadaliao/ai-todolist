@@ -1,7 +1,7 @@
 import { createProject, sidebar } from '@ai-todo/core';
 import { getLocale, t } from '@ai-todo/shared';
 import { router } from 'expo-router';
-import { CheckCircle2, ChevronRight, Hash, Plus, Sparkles, Tag, Trash2 } from 'lucide-react-native';
+import { CheckCircle2, ChevronRight, Hash, Mic, Plus, Sparkles, Tag, Trash2 } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Screen } from '../../components/Screen';
@@ -36,6 +36,17 @@ export default function BrowseScreen() {
           icon={<Sparkles size={20} color={c.jade} />}
           label={t('palette.brainDump')}
           onPress={() => router.push('/dump')}
+          accessory={
+            <Pressable
+              onPress={() => router.push({ pathname: '/dump', params: { listen: '1' } })}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('ai.dump.speak')}
+              style={({ pressed }) => [styles.mic, { backgroundColor: pressed ? c.jadeLine : c.jadeSoft }]}
+            >
+              <Mic size={18} color={c.jade} strokeWidth={2.3} />
+            </Pressable>
+          }
         />
       </Group>
       <GroupTitle title={t('nav.projects')} onAdd={newProject} />
@@ -115,8 +126,11 @@ function Row({
   count,
   onPress,
   indent = 0,
+  accessory,
 }: {
   icon: ReactNode;
+  /** Shown instead of the chevron, e.g. a second button. */
+  accessory?: ReactNode;
   label: string;
   count?: number;
   onPress: () => void;
@@ -136,12 +150,20 @@ function Row({
         {label}
       </Txt>
       {count ? <Txt variant="meta">{count}</Txt> : null}
-      <ChevronRight size={18} color={c.lineStrong} />
+      {accessory ?? <ChevronRight size={18} color={c.lineStrong} />}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  mic: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: -6,
+  },
   groupTitle: {
     flexDirection: 'row',
     justifyContent: 'space-between',
