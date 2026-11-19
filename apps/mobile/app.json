@@ -8,7 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "buildNumber": "5",
+      "buildNumber": "6",
       "bundleIdentifier": "com.kadaliao.docket",
       "supportsTablet": true,
       "infoPlist": {
