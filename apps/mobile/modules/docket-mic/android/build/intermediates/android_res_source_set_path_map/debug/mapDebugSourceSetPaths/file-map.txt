@@ -1,9 +1,0 @@
-com.kadaliao.docket.mic.docket-mic-pngs-0 /Volumes/Data-External/workspace/ai-todolist/apps/mobile/modules/docket-mic/android/build/generated/res/pngs/debug
-com.kadaliao.docket.mic.docket-mic-updated_navigation_xml-1 /Volumes/Data-External/workspace/ai-todolist/apps/mobile/modules/docket-mic/android/build/generated/updated_navigation_xml/debug
-com.kadaliao.docket.mic.docket-mic-mergeDebugResources-2 /Volumes/Data-External/workspace/ai-todolist/apps/mobile/modules/docket-mic/android/build/intermediates/incremental/debug/mergeDebugResources/merged.dir
-com.kadaliao.docket.mic.docket-mic-mergeDebugResources-3 /Volumes/Data-External/workspace/ai-todolist/apps/mobile/modules/docket-mic/android/build/intermediates/incremental/debug/mergeDebugResources/stripped.dir
-com.kadaliao.docket.mic.docket-mic-debug-4 /Volumes/Data-External/workspace/ai-todolist/apps/mobile/modules/docket-mic/android/build/intermediates/merged_res/debug/mergeDebugResources
-com.kadaliao.docket.mic.docket-mic-debug-5 /Volumes/Data-External/workspace/ai-todolist/apps/mobile/modules/docket-mic/android/build/intermediates/packaged_res/debug/packageDebugResources
-com.kadaliao.docket.mic.docket-mic-debug-6 /Volumes/Data-External/workspace/ai-todolist/apps/mobile/modules/docket-mic/android/src/debug/res
-com.kadaliao.docket.mic.docket-mic-main-7 /Volumes/Data-External/workspace/ai-todolist/apps/mobile/modules/docket-mic/android/src/main/res
-gradleHome-0 /Users/liaoxingyi/.gradle

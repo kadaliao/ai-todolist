@@ -15,3 +15,6 @@ playwright-report/
 assets/store/raw/*
 !assets/store/raw/*-widgets.png
 !assets/store/raw/ipad-*.png
+
+# Native module build output
+apps/mobile/modules/*/android/build/
